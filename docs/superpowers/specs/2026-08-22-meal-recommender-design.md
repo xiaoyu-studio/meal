@@ -329,9 +329,9 @@ const CONFIG = {
 
 | 时间 | URL |
 |---|---|
-| 08:00 | `https://<用户名>.github.io/meal/?slot=breakfast` |
-| 11:30 | `https://<用户名>.github.io/meal/?slot=lunch` |
-| 17:30 | `https://<用户名>.github.io/meal/?slot=dinner` |
+| 08:00 | `https://xiaoyu-studio.github.io/meal/?slot=breakfast` |
+| 11:30 | `https://xiaoyu-studio.github.io/meal/?slot=lunch` |
+| 17:30 | `https://xiaoyu-studio.github.io/meal/?slot=dinner` |
 
 时间由用户按自己作息设定。此步骤需在 README 中写出图文步骤。
 
