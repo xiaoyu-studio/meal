@@ -116,3 +116,30 @@ export function reduceObservations(events) {
 
   return out.sort((a, b) => a.ts - b.ts);
 }
+
+/**
+ * 建立「上一次真的吃过是哪天」的索引，按菜品 / 店铺 / tag 三个维度。
+ * 日期键是 'YYYY-MM-DD' 字符串，字典序即时间序，可直接比较。
+ */
+export function buildEatenIndex(observations, dishesById) {
+  const byDish = new Map();
+  const byShop = new Map();
+  const byTag = new Map();
+
+  const keepLatest = (map, key, dateKey) => {
+    const prev = map.get(key);
+    if (prev === undefined || dateKey > prev) map.set(key, dateKey);
+  };
+
+  for (const o of observations) {
+    if (!o.eaten) continue;
+    const dish = dishesById.get(o.dishId);
+    if (!dish) continue; // 候选池里已删除的菜
+
+    keepLatest(byDish, dish.id, o.dateKey);
+    keepLatest(byShop, dish.shopId, o.dateKey);
+    for (const tag of dish.tags ?? []) keepLatest(byTag, tag, o.dateKey);
+  }
+
+  return { byDish, byShop, byTag };
+}

@@ -134,3 +134,63 @@ test('多个 rated 事件，最后一个赢', () => {
   assert.equal(obs[0].value, 1.0);
   assert.equal(obs[0].ratedValue, 'good');
 });
+
+import { buildEatenIndex } from '../src/observations.js';
+
+const dishesById = new Map([
+  ['d1', { id: 'd1', shopId: 's1', tags: ['川菜', '辣'] }],
+  ['d2', { id: 'd2', shopId: 's1', tags: ['川菜'] }],
+  ['d3', { id: 'd3', shopId: 's2', tags: ['面食'] }],
+]);
+
+const obs = (dishId, dateKey, eaten) => ({
+  dishId, dateKey, slot: 'lunch', ts: new Date(`${dateKey}T12:00:00`).getTime(),
+  value: eaten ? 1 : 0.2, source: eaten ? 'rated' : 'swapped',
+  ratedValue: eaten ? 'good' : null, eaten,
+});
+
+test('buildEatenIndex 只统计真的吃过的观察值', () => {
+  const idx = buildEatenIndex(
+    [obs('d1', '2026-08-20', true), obs('d3', '2026-08-21', false)],
+    dishesById,
+  );
+  assert.equal(idx.byDish.get('d1'), '2026-08-20');
+  assert.equal(idx.byDish.has('d3'), false);
+  assert.equal(idx.byShop.has('s2'), false);
+});
+
+test('buildEatenIndex 对每个键保留最近的日期', () => {
+  const idx = buildEatenIndex(
+    [obs('d1', '2026-08-18', true), obs('d1', '2026-08-21', true)],
+    dishesById,
+  );
+  assert.equal(idx.byDish.get('d1'), '2026-08-21');
+});
+
+test('buildEatenIndex 按店铺聚合不同菜品', () => {
+  const idx = buildEatenIndex(
+    [obs('d1', '2026-08-18', true), obs('d2', '2026-08-21', true)],
+    dishesById,
+  );
+  assert.equal(idx.byShop.get('s1'), '2026-08-21');
+});
+
+test('buildEatenIndex 按 tag 聚合，一道菜的多个 tag 都记入', () => {
+  const idx = buildEatenIndex([obs('d1', '2026-08-20', true)], dishesById);
+  assert.equal(idx.byTag.get('川菜'), '2026-08-20');
+  assert.equal(idx.byTag.get('辣'), '2026-08-20');
+  assert.equal(idx.byTag.has('面食'), false);
+});
+
+test('buildEatenIndex 忽略候选池里已不存在的菜品', () => {
+  const idx = buildEatenIndex([obs('deleted', '2026-08-20', true)], dishesById);
+  assert.equal(idx.byDish.size, 0);
+  assert.equal(idx.byShop.size, 0);
+});
+
+test('buildEatenIndex 对空输入返回三个空 Map', () => {
+  const idx = buildEatenIndex([], dishesById);
+  assert.equal(idx.byDish.size, 0);
+  assert.equal(idx.byShop.size, 0);
+  assert.equal(idx.byTag.size, 0);
+});
