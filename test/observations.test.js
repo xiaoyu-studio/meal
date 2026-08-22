@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { reduceObservations } from '../src/observations.js';
 
-const DAY = 86400000;
 const at = (dayOffset, hour) =>
   new Date(2026, 7, 22 + dayOffset, hour, 0).getTime();
 
@@ -112,4 +111,26 @@ test('返回结果按 ts 升序', () => {
     ev('recommended', 'c', at(1, 12)),
   ]);
   assert.deepEqual(obs.map((o) => o.dishId), ['a', 'c', 'b']);
+});
+
+test('跨天无反应的同菜同饭点产生两条不同的观察值', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'd1', at(0, 12), 'lunch'),
+    ev('recommended', 'd1', at(3, 12), 'lunch'),
+  ]);
+  assert.equal(obs.length, 2);
+  assert.deepEqual(obs.map((o) => o.dateKey), ['2026-08-22', '2026-08-25']);
+  assert.deepEqual(obs.map((o) => o.dishId), ['d1', 'd1']);
+  assert.deepEqual(obs.map((o) => o.slot), ['lunch', 'lunch']);
+});
+
+test('多个 rated 事件，最后一个赢', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'd1', at(0, 12)),
+    ev('rated', 'd1', at(0, 13), 'lunch', 'ok'),
+    ev('rated', 'd1', at(1, 14), 'lunch', 'good'),
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].value, 1.0);
+  assert.equal(obs[0].ratedValue, 'good');
 });

@@ -3,29 +3,88 @@ import { localDateKey } from './dates.js';
 
 /**
  * 把原始事件流压成观察值：一条观察值 = 一顿饭里的一道菜。
- * 分组键为「饭点 + 菜品」，不包含日期。同一顿内的重复 recommended
- * （例如用户重载页面）会自然折叠为一条。
- * dateKey 来自该分组内的 recommended 事件。
+ *
+ * 两步处理：
+ * Pass 1: 从 recommended 事件构建规范组（分组键：dateKey|slot|dishId）
+ * Pass 2: 将其他事件附加到最近的（ts 最大但 <= event.ts）匹配组
+ *
+ * 这样既能保留跨天历史，又能处理后序事件（例如评分可能在第二天）。
  */
 export function reduceObservations(events) {
-  const groups = new Map();
+  // Pass 1: 从 recommended 事件构建规范组
+  const groups = new Map(); // key = dateKey|slot|dishId -> group object
+  const groupsBySlotDish = new Map(); // key = slot|dishId -> [groups]（按 ts 升序）
+
   for (const e of events) {
-    const key = `${e.slot}|${e.dishId}`;
-    let list = groups.get(key);
-    if (!list) groups.set(key, (list = []));
-    list.push(e);
+    if (e.type === 'recommended') {
+      const dateKey = localDateKey(e.ts);
+      const key = `${dateKey}|${e.slot}|${e.dishId}`;
+
+      if (!groups.has(key)) {
+        const group = {
+          dateKey,
+          slot: e.slot,
+          dishId: e.dishId,
+          ts: e.ts,
+          events: [e],
+        };
+        groups.set(key, group);
+
+        // 也保存到 groupsBySlotDish 中，用于 Pass 2 的查找
+        const slotDishKey = `${e.slot}|${e.dishId}`;
+        if (!groupsBySlotDish.has(slotDishKey)) {
+          groupsBySlotDish.set(slotDishKey, []);
+        }
+        groupsBySlotDish.get(slotDishKey).push(group);
+      } else {
+        // 同一个 dateKey|slot|dishId 有多个 recommended 事件（页面重载）
+        // 保留最早的 ts
+        const group = groups.get(key);
+        if (e.ts < group.ts) {
+          group.ts = e.ts;
+        }
+        group.events.push(e);
+      }
+    }
   }
 
-  const out = [];
-  for (const [key, list] of groups) {
-    const recommended = list
-      .filter((e) => e.type === 'recommended')
-      .sort((a, b) => a.ts - b.ts)[0];
-    if (!recommended) continue;
+  // 确保每个 slotDish 的组按 ts 升序排列
+  for (const groupList of groupsBySlotDish.values()) {
+    groupList.sort((a, b) => a.ts - b.ts);
+  }
 
-    const rated = list.find((e) => e.type === 'rated');
-    const swapped = list.find((e) => e.type === 'swapped');
-    const clicked = list.find((e) => e.type === 'clicked');
+  // Pass 2: 将非 recommended 事件附加到最近的匹配组
+  for (const e of events) {
+    if (e.type === 'recommended') continue;
+
+    const slotDishKey = `${e.slot}|${e.dishId}`;
+    const candidates = groupsBySlotDish.get(slotDishKey);
+    if (!candidates) continue;
+
+    // 找到满足 group.ts <= e.ts 的最大 ts 的组
+    let targetGroup = null;
+    for (const group of candidates) {
+      if (group.ts <= e.ts) {
+        targetGroup = group;
+      } else {
+        break; // 因为列表已排序，后续都不符合
+      }
+    }
+
+    if (targetGroup) {
+      targetGroup.events.push(e);
+    }
+  }
+
+  // 减缩每个组
+  const out = [];
+  for (const group of groups.values()) {
+    const ratedEvents = group.events.filter((e) => e.type === 'rated');
+    const rated = ratedEvents.length > 0
+      ? ratedEvents.reduce((latest, e) => (e.ts > latest.ts ? e : latest))
+      : null;
+    const swapped = group.events.find((e) => e.type === 'swapped');
+    const clicked = group.events.find((e) => e.type === 'clicked');
 
     let value;
     let source;
@@ -43,13 +102,11 @@ export function reduceObservations(events) {
       source = 'none';
     }
 
-    const dateKey = localDateKey(recommended.ts);
-    const [slot, dishId] = key.split('|');
     out.push({
-      dishId,
-      dateKey,
-      slot,
-      ts: recommended.ts,
+      dishId: group.dishId,
+      dateKey: group.dateKey,
+      slot: group.slot,
+      ts: group.ts,
       value,
       source,
       ratedValue: rated ? rated.value : null,
