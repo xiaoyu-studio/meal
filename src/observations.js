@@ -143,3 +143,46 @@ export function buildEatenIndex(observations, dishesById) {
 
   return { byDish, byShop, byTag };
 }
+
+/**
+ * 下次打开时该补问哪一顿。每次最多返回一条 —— 积压再多也只问最近那顿，
+ * 避免一次弹出一串问题。
+ *
+ * 被「换一个」换掉的观察值不补问：用户按了换，说明他没吃这道菜。
+ */
+export function pendingFeedback(observations, nowTs, slot) {
+  if (observations.length === 0) return null;
+
+  const latest = observations.reduce((a, b) => (b.ts > a.ts ? b : a));
+  const nowKey = localDateKey(nowTs);
+
+  if (latest.dateKey === nowKey && latest.slot === slot) return null;
+  if (latest.source === 'rated') return null;
+  if (latest.source === 'swapped') return null;
+  return latest;
+}
+
+/**
+ * 今天这一顿的当前状态，完全从事件流推导 —— 因此页面重载不会丢失
+ * 已换次数，也不会让已经定下的这顿重新掷骰子。
+ */
+export function currentPick(events, slot, nowKey) {
+  const todays = events.filter(
+    (e) => e.slot === slot && localDateKey(e.ts) === nowKey,
+  );
+
+  const swappedDishIds = [
+    ...new Set(todays.filter((e) => e.type === 'swapped').map((e) => e.dishId)),
+  ];
+  const swapped = new Set(swappedDishIds);
+
+  const alive = todays
+    .filter((e) => e.type === 'recommended' && !swapped.has(e.dishId))
+    .sort((a, b) => a.ts - b.ts);
+
+  return {
+    activeDishId: alive.length ? alive[alive.length - 1].dishId : null,
+    swappedDishIds,
+    swapCount: swappedDishIds.length,
+  };
+}

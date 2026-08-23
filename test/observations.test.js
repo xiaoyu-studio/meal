@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reduceObservations } from '../src/observations.js';
+import { reduceObservations, buildEatenIndex, pendingFeedback, currentPick } from '../src/observations.js';
 
 const at = (dayOffset, hour) =>
   new Date(2026, 7, 22 + dayOffset, hour, 0).getTime();
@@ -135,8 +135,6 @@ test('多个 rated 事件，最后一个赢', () => {
   assert.equal(obs[0].ratedValue, 'good');
 });
 
-import { buildEatenIndex } from '../src/observations.js';
-
 const dishesById = new Map([
   ['d1', { id: 'd1', shopId: 's1', tags: ['川菜', '辣'] }],
   ['d2', { id: 'd2', shopId: 's1', tags: ['川菜'] }],
@@ -193,4 +191,108 @@ test('buildEatenIndex 对空输入返回三个空 Map', () => {
   assert.equal(idx.byDish.size, 0);
   assert.equal(idx.byShop.size, 0);
   assert.equal(idx.byTag.size, 0);
+});
+
+const NOW = new Date(2026, 7, 22, 12, 0).getTime(); // 本地 2026-08-22 12:00
+const obsAt = (dishId, dayOffset, hour, slot, source, ratedValue = null) => ({
+  dishId,
+  dateKey: `2026-08-${String(22 + dayOffset).padStart(2, '0')}`,
+  slot,
+  ts: new Date(2026, 7, 22 + dayOffset, hour, 0).getTime(),
+  value: 0.5, source, ratedValue, eaten: source === 'rated',
+});
+
+test('pendingFeedback 对空历史返回 null', () => {
+  assert.equal(pendingFeedback([], NOW, 'lunch'), null);
+});
+
+test('pendingFeedback 补问昨晚未评分的那顿', () => {
+  const r = pendingFeedback(
+    [obsAt('d1', -1, 19, 'dinner', 'clicked')], NOW, 'lunch');
+  assert.equal(r.dishId, 'd1');
+});
+
+test('pendingFeedback 跳过当前这一顿', () => {
+  const r = pendingFeedback(
+    [obsAt('d1', 0, 12, 'lunch', 'clicked')], NOW, 'lunch');
+  assert.equal(r, null);
+});
+
+test('pendingFeedback 跳过已评分的', () => {
+  const r = pendingFeedback(
+    [obsAt('d1', -1, 19, 'dinner', 'rated', 'good')], NOW, 'lunch');
+  assert.equal(r, null);
+});
+
+test('pendingFeedback 跳过被换掉的（用户没吃它）', () => {
+  const r = pendingFeedback(
+    [obsAt('d1', -1, 19, 'dinner', 'swapped')], NOW, 'lunch');
+  assert.equal(r, null);
+});
+
+test('pendingFeedback 补问推了但毫无动作的那顿', () => {
+  const r = pendingFeedback(
+    [obsAt('d1', -1, 19, 'dinner', 'none')], NOW, 'lunch');
+  assert.equal(r.dishId, 'd1');
+});
+
+test('pendingFeedback 只看最近一条，不翻旧账', () => {
+  const r = pendingFeedback([
+    obsAt('old', -3, 12, 'lunch', 'clicked'),
+    obsAt('recent', -1, 19, 'dinner', 'rated', 'ok'),
+  ], NOW, 'lunch');
+  assert.equal(r, null);
+});
+
+test('pendingFeedback 在同一顿换过再点的情况下问最后点的那个', () => {
+  const r = pendingFeedback([
+    obsAt('a', -1, 19, 'dinner', 'swapped'),
+    { ...obsAt('b', -1, 19, 'dinner', 'clicked'), ts: new Date(2026, 7, 21, 19, 5).getTime() },
+  ], NOW, 'lunch');
+  assert.equal(r.dishId, 'b');
+});
+
+const evt = (type, dishId, hour, minute = 0, slot = 'lunch') => ({
+  id: `${type}-${dishId}-${hour}${minute}`,
+  ts: new Date(2026, 7, 22, hour, minute).getTime(),
+  slot, dishId, type, value: null,
+});
+
+test('currentPick 对空事件返回无选择', () => {
+  const p = currentPick([], 'lunch', '2026-08-22');
+  assert.deepEqual(p, { activeDishId: null, swappedDishIds: [], swapCount: 0 });
+});
+
+test('currentPick 返回当前未被换掉的推荐', () => {
+  const p = currentPick([evt('recommended', 'a', 12)], 'lunch', '2026-08-22');
+  assert.equal(p.activeDishId, 'a');
+  assert.equal(p.swapCount, 0);
+});
+
+test('currentPick 在换过之后返回新的推荐并计数', () => {
+  const p = currentPick([
+    evt('recommended', 'a', 12, 0),
+    evt('swapped', 'a', 12, 1),
+    evt('recommended', 'b', 12, 2),
+  ], 'lunch', '2026-08-22');
+  assert.equal(p.activeDishId, 'b');
+  assert.deepEqual(p.swappedDishIds, ['a']);
+  assert.equal(p.swapCount, 1);
+});
+
+test('currentPick 在刚换掉还没推新的时返回 null', () => {
+  const p = currentPick([
+    evt('recommended', 'a', 12, 0),
+    evt('swapped', 'a', 12, 1),
+  ], 'lunch', '2026-08-22');
+  assert.equal(p.activeDishId, null);
+  assert.equal(p.swapCount, 1);
+});
+
+test('currentPick 忽略其他饭点和其他日期的事件', () => {
+  const p = currentPick([
+    evt('recommended', 'a', 19, 0, 'dinner'),
+    { ...evt('recommended', 'b', 12), ts: new Date(2026, 7, 21, 12, 0).getTime() },
+  ], 'lunch', '2026-08-22');
+  assert.equal(p.activeDishId, null);
 });
