@@ -48,7 +48,7 @@ async function renderFeedback() {
     const overlay = el('feedback');
     overlay.innerHTML = `
       <div class="sheet">
-        <p class="fb-question">上顿的${dish.name}怎么样？</p>
+        <p class="fb-question"></p>
         <div class="fb-buttons">
           ${Object.entries(RATING_LABELS)
             .map(([k, label]) => `<button type="button" data-rate="${k}">${label}</button>`)
@@ -64,6 +64,9 @@ async function renderFeedback() {
         </div>
       </div>
     `;
+    // dish.name 来自用户在候选池里填写的数据（Task 15），不能当作可信 HTML 拼进
+    // innerHTML —— 走 textContent 天然转义，不需要额外的转义辅助函数。
+    overlay.querySelector('.fb-question').textContent = `上顿的${dish.name}怎么样？`;
     overlay.hidden = false;
 
     const close = () => { overlay.hidden = true; overlay.innerHTML = ''; };
