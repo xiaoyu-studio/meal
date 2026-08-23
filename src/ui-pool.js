@@ -3,7 +3,7 @@ import { reduceObservations } from './observations.js';
 import { tasteOf } from './recommender.js';
 import { snapshotFilename } from './snapshot.js';
 import {
-  loadAll, putShop, putDish, deleteShop, deleteDish,
+  loadAll, putShop, putDish, deleteShop, deleteDish, setHygiene,
   newId, exportSnapshot, importSnapshot,
 } from './store.js';
 
@@ -91,6 +91,17 @@ async function render() {
                 ${esc(PLATFORM_LABELS[shop.platform] ?? shop.platform)}・卫生${esc(HYGIENE_LABELS[shop.hygiene] ?? shop.hygiene)}
               </span>
             </div>
+            <p class="shop-meta hygiene-row">
+              <label>
+                卫生标记
+                <select class="hygiene-select" data-hygiene="${esc(shop.id)}">
+                  ${Object.entries(HYGIENE_LABELS)
+                    .map(([v, label]) =>
+                      `<option value="${v}"${shop.hygiene === v ? ' selected' : ''}>${label}</option>`)
+                    .join('')}
+                </select>
+              </label>
+            </p>
             <p class="shop-meta">
               ${linkHtml}
               <button class="link" data-fix-link="${esc(shop.id)}" type="button">链接失效了？</button>
@@ -177,6 +188,25 @@ el('shops').addEventListener('submit', async (e) => {
   } catch (err) {
     console.error('保存菜品失败', err);
     if (msgEl) msgEl.textContent = '保存失败，请稍后重试。';
+  }
+});
+
+/**
+ * 卫生标记的唯一可改入口。「吃坏了」是一次点击就永久拉黑、且按 spec §7.3
+ * 刻意不做二次确认的操作 —— 那就必须在别处留一条回头路，否则误触之后只能
+ * 删店重加（新 id，历史全部作废）。候选池正是用户来看和修正系统学到了什么
+ * 的地方（§7.2）。
+ */
+el('shops').addEventListener('change', async (e) => {
+  const shopId = e.target.dataset?.hygiene;
+  if (!shopId) return;
+
+  try {
+    await setHygiene(shopId, e.target.value);
+    await render();
+  } catch (err) {
+    console.error('修改卫生标记失败', err);
+    el('io-msg').textContent = '修改卫生标记失败，请稍后重试。';
   }
 });
 

@@ -210,6 +210,18 @@ body {
 .shop-meta { color: var(--muted); font-size: 0.8rem; }
 .shop-blocked { color: var(--accent); }
 
+/* 「吃坏了」的回头路：误触拉黑之后要能在候选池里改回来。 */
+.hygiene-row { margin: 0.5rem 0 0; }
+.hygiene-select {
+  margin-left: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
 .dish-row {
   display: flex;
   justify-content: space-between;
