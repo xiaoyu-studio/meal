@@ -1,8 +1,8 @@
 import { SLOT_LABELS, SLOTS, CONFIG } from './config.js';
 import { slotFromTime, localDateKey } from './dates.js';
-import { currentPick } from './observations.js';
+import { currentPick, pendingFeedback, reduceObservations } from './observations.js';
 import { recommend } from './recommender.js';
-import { loadAll, appendEvent } from './store.js';
+import { loadAll, appendEvent, setHygiene } from './store.js';
 import { openShopLink, copyText } from './deeplink.js';
 
 const el = (id) => document.getElementById(id);
@@ -23,6 +23,103 @@ function showFailure(err) {
 }
 
 let state = { slot: null, dish: null, shop: null, swapCount: 0 };
+
+const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '没吃成' };
+
+/**
+ * 渲染补问上一顿的浮层。已评过、被换掉、或就是当前这顿的，都不问——
+ * 这些跳过规则全在 pendingFeedback 里，这里只负责渲染它返回的结果。
+ *
+ * 本地存储读取失败时不该拦住主卡片渲染：吞掉错误、跳过浮层即可。
+ */
+async function renderFeedback() {
+  try {
+    const now = Date.now();
+    const slot = resolveSlot(now);
+    const { shops, dishes, events } = await loadAll();
+
+    const target = pendingFeedback(reduceObservations(events), now, slot);
+    if (!target) return;
+
+    const dish = dishes.find((d) => d.id === target.dishId);
+    if (!dish) return; // 菜已从候选池删除，无从问起
+    const shop = shops.find((s) => s.id === dish.shopId);
+
+    const overlay = el('feedback');
+    overlay.innerHTML = `
+      <div class="sheet">
+        <p class="fb-question">上顿的${dish.name}怎么样？</p>
+        <div class="fb-buttons">
+          ${Object.entries(RATING_LABELS)
+            .map(([k, label]) => `<button type="button" data-rate="${k}">${label}</button>`)
+            .join('')}
+        </div>
+        <div class="fb-extra">
+          <button type="button" class="link" data-action="sick">吃坏了</button>
+          <button type="button" class="link" data-action="price">填实付价</button>
+        </div>
+        <div class="fb-price-box" hidden>
+          <input type="number" inputmode="decimal" placeholder="实付价（元）">
+          <button type="button" data-action="save-price">保存</button>
+        </div>
+      </div>
+    `;
+    overlay.hidden = false;
+
+    const close = () => { overlay.hidden = true; overlay.innerHTML = ''; };
+
+    overlay.addEventListener('click', async (e) => {
+      const button = e.target.closest('button');
+      if (!button) return;
+
+      try {
+        if (button.dataset.rate) {
+          await appendEvent({
+            slot: target.slot, dishId: target.dishId,
+            type: 'rated', value: button.dataset.rate,
+          });
+          close();
+          await render();
+          return;
+        }
+
+        if (button.dataset.action === 'sick') {
+          await appendEvent({ slot: target.slot, dishId: target.dishId, type: 'sick' });
+          await appendEvent({
+            slot: target.slot, dishId: target.dishId, type: 'rated', value: 'bad',
+          });
+          if (shop) await setHygiene(shop.id, 'blocked');
+          close();
+          await render();
+          return;
+        }
+
+        if (button.dataset.action === 'price') {
+          overlay.querySelector('.fb-price-box').hidden = false;
+          overlay.querySelector('.fb-price-box input').focus();
+          return;
+        }
+
+        if (button.dataset.action === 'save-price') {
+          const amount = Number(overlay.querySelector('.fb-price-box input').value);
+          if (Number.isFinite(amount) && amount > 0) {
+            await appendEvent({
+              slot: target.slot, dishId: target.dishId, type: 'paid', value: amount,
+            });
+          }
+          overlay.querySelector('.fb-price-box').hidden = true;
+        }
+      } catch (err) {
+        // 反馈写入失败不该把浮层卡死在打开状态——记录并关闭，用户下次还有机会。
+        console.error('记录反馈失败', err);
+        close();
+      }
+    });
+  } catch (err) {
+    // 读取本地存储失败时跳过浮层即可，不能连累主卡片渲染。
+    console.error('渲染反馈浮层失败', err);
+  }
+}
 
 async function render() {
   try {
@@ -118,4 +215,5 @@ el('retry').addEventListener('click', () => {
   render();
 });
 
+await renderFeedback();
 await render();
