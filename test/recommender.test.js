@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterCandidates, tasteOf, effectivePriceOf, valueOf } from '../src/recommender.js';
+import { filterCandidates, tasteOf, effectivePriceOf, valueOf, fatigueOf, reasonFor } from '../src/recommender.js';
 import { CONFIG } from '../src/config.js';
 
 const DAY = 86400000;
@@ -175,8 +175,6 @@ test('valueOf 结果恒在 [0,1] 区间内', () => {
   }
 });
 
-import { fatigueOf } from '../src/recommender.js';
-
 const TODAY = '2026-08-22';
 const daysBefore = (n) => {
   const d = new Date(2026, 7, 22);
@@ -254,4 +252,66 @@ test('total 恒在 (0,1] 区间内', () => {
     tagLastEatenKeys: [TODAY], nowKey: TODAY,
   });
   assert.ok(f.total > 0 && f.total <= 1);
+});
+
+const base = {
+  hasObservations: true, lastRatedValue: null,
+  isTopTaste: false, isTopValue: false, fDish: 0.5,
+};
+
+test('冷启动的菜说"还没试过"', () => {
+  assert.equal(
+    reasonFor({ ...base, hasObservations: false, isTopTaste: true }),
+    '还没试过，试试看',
+  );
+});
+
+test('上次评了 good 就说"你上次说好吃"', () => {
+  assert.equal(
+    reasonFor({ ...base, lastRatedValue: 'good', isTopValue: true }),
+    '你上次说好吃',
+  );
+});
+
+test('好吃度最高说"评价一直不错"', () => {
+  assert.equal(reasonFor({ ...base, isTopTaste: true }), '评价一直不错');
+});
+
+test('实惠度最高说"同类里最便宜"', () => {
+  assert.equal(reasonFor({ ...base, isTopValue: true }), '同类里最便宜');
+});
+
+test('久未食用说"好久没吃了"', () => {
+  assert.equal(reasonFor({ ...base, fDish: 0.85 }), '好久没吃了');
+});
+
+test('都不满足时兜底', () => {
+  assert.equal(reasonFor(base), '换换口味');
+});
+
+test('优先级：冷启动压过其余全部', () => {
+  assert.equal(
+    reasonFor({
+      hasObservations: false, lastRatedValue: 'good',
+      isTopTaste: true, isTopValue: true, fDish: 1,
+    }),
+    '还没试过，试试看',
+  );
+});
+
+test('优先级：好吃度最高压过实惠度最高', () => {
+  assert.equal(
+    reasonFor({ ...base, isTopTaste: true, isTopValue: true }),
+    '评价一直不错',
+  );
+});
+
+test('上次评了 ok 或 bad 不触发"你上次说好吃"', () => {
+  assert.equal(reasonFor({ ...base, lastRatedValue: 'ok' }), '换换口味');
+  assert.equal(reasonFor({ ...base, lastRatedValue: 'bad' }), '换换口味');
+});
+
+test('fDish 恰好 0.85 触发，0.84 不触发', () => {
+  assert.equal(reasonFor({ ...base, fDish: 0.85 }), '好久没吃了');
+  assert.equal(reasonFor({ ...base, fDish: 0.84 }), '换换口味');
 });

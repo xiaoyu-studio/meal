@@ -94,3 +94,22 @@ export function fatigueOf({
   const total = Math.max(CONFIG.FATIGUE_FLOOR, fDish * fShop * fTag);
   return { total, fDish, fShop, fTag };
 }
+
+/**
+ * 一句话推荐理由。按 spec §6.8 的顺序取第一个命中的分支。
+ * 带理由的推荐更容易被接受，能实际压低"换一个"的点击率 —— 这不是装饰。
+ */
+export function reasonFor({
+  hasObservations,
+  lastRatedValue,
+  isTopTaste,
+  isTopValue,
+  fDish,
+}) {
+  if (!hasObservations) return '还没试过，试试看';
+  if (lastRatedValue === 'good') return '你上次说好吃';
+  if (isTopTaste) return '评价一直不错';
+  if (isTopValue) return '同类里最便宜';
+  if (fDish >= CONFIG.LONG_TIME_FDISH) return '好久没吃了';
+  return '换换口味';
+}
