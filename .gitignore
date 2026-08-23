@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 .claude/settings.local.json
+# SDD 工作区：计划、评审 diff、agent 报告。仓库要发到公开的 GitHub Pages，
+# 一次 `git add .` 就会把整个过程记录一起推上去。
+.superpowers/

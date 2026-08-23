@@ -25,6 +25,21 @@ export function fromSnapshot(obj) {
       throw new Error(`导入失败：字段 ${key} 缺失或不是数组`);
     }
   }
+
+  // 三个 store 的 keyPath 都是 id。缺 id 的行会让 put() 抛出 WebKit 的
+  // 英文 DataError，那是全应用最后一条会把英文报错甩给用户的路径 ——
+  // 在这里拦住，换成说得清是哪一批数据出了问题的中文提示。
+  for (const key of ['shops', 'dishes', 'events']) {
+    for (const [i, row] of obj[key].entries()) {
+      if (row === null || typeof row !== 'object' || Array.isArray(row)) {
+        throw new Error(`导入失败：${key} 第 ${i + 1} 条不是一个对象`);
+      }
+      if (typeof row.id !== 'string' || row.id === '') {
+        throw new Error(`导入失败：${key} 第 ${i + 1} 条缺少 id`);
+      }
+    }
+  }
+
   return { shops: obj.shops, dishes: obj.dishes, events: obj.events };
 }
 
