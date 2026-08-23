@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterCandidates, tasteOf, effectivePriceOf, valueOf, fatigueOf, reasonFor } from '../src/recommender.js';
+import { filterCandidates, tasteOf, effectivePriceOf, valueOf, fatigueOf, reasonFor, recommend } from '../src/recommender.js';
 import { CONFIG } from '../src/config.js';
 
 const DAY = 86400000;
@@ -314,4 +314,111 @@ test('上次评了 ok 或 bad 不触发"你上次说好吃"', () => {
 test('fDish 恰好 0.85 触发，0.84 不触发', () => {
   assert.equal(reasonFor({ ...base, fDish: 0.85 }), '好久没吃了');
   assert.equal(reasonFor({ ...base, fDish: 0.84 }), '换换口味');
+});
+
+/** 固定随机源，让 jitter 在测试下变成常数，score 完全可预测。 */
+const fixedRandom = () => 0.5;
+
+const recShops = [
+  { id: 's1', name: '张记', platform: 'meituan', link: 'https://x/1', hygiene: 'unknown' },
+  { id: 's2', name: '李记', platform: 'eleme', link: 'https://x/2', hygiene: 'unknown' },
+];
+
+test('候选池为空时返回 null', () => {
+  assert.equal(
+    recommend({ dishes: [], shops: recShops, slot: 'lunch', now: NOW, random: fixedRandom }),
+    null,
+  );
+});
+
+test('全部店铺被拉黑时返回 null', () => {
+  assert.equal(
+    recommend({
+      dishes: [dish('d1', 's1')],
+      shops: [{ ...recShops[0], hygiene: 'blocked' }],
+      slot: 'lunch', now: NOW, random: fixedRandom,
+    }),
+    null,
+  );
+});
+
+test('零事件冷启动时正常返回且不崩', () => {
+  const r = recommend({
+    dishes: [dish('d1', 's1'), dish('d2', 's2')],
+    shops: recShops, slot: 'lunch', now: NOW, random: fixedRandom,
+  });
+  assert.ok(r);
+  assert.ok(['d1', 'd2'].includes(r.dish.id));
+  assert.equal(r.reason, '还没试过，试试看');
+});
+
+test('候选池只有一道菜时价格百分位不崩', () => {
+  const r = recommend({
+    dishes: [dish('d1', 's1')], shops: recShops,
+    slot: 'lunch', now: NOW, random: fixedRandom,
+  });
+  assert.equal(r.dish.id, 'd1');
+});
+
+test('昨天刚吃过的菜排在没吃过的后面', () => {
+  const yesterday = new Date(2026, 7, 21, 19, 0).getTime();
+  const events = [
+    { id: 'e1', ts: yesterday, slot: 'dinner', dishId: 'd1', type: 'recommended', value: null },
+    { id: 'e2', ts: yesterday + 1000, slot: 'dinner', dishId: 'd1', type: 'rated', value: 'good' },
+  ];
+  const r = recommend({
+    dishes: [
+      dish('d1', 's1', { tags: ['川菜'] }),
+      dish('d2', 's2', { tags: ['面食'] }),
+    ],
+    shops: recShops, events, slot: 'lunch', now: NOW, random: fixedRandom,
+  });
+  // d1 好吃度 1.0 但腻味系数 ≈1-exp(-1/7)=0.133；d2 冷启动 0.7 且无腻味
+  assert.equal(r.dish.id, 'd2');
+});
+
+test('连换两次后仍能给出第三个不同的推荐', () => {
+  const dishes = [dish('a', 's1'), dish('b', 's1'), dish('c', 's2')];
+  const r = recommend({
+    dishes, shops: recShops, slot: 'lunch', now: NOW,
+    excludedDishIds: ['a', 'b'], random: fixedRandom,
+  });
+  assert.equal(r.dish.id, 'c');
+});
+
+test('注入固定随机源时结果确定可复现', () => {
+  const dishes = [
+    dish('a', 's1', { refPrice: 15 }),
+    dish('b', 's2', { refPrice: 40 }),
+  ];
+  const args = { dishes, shops: recShops, slot: 'lunch', now: NOW, random: fixedRandom };
+  const first = recommend(args);
+  const second = recommend(args);
+  assert.equal(first.dish.id, second.dish.id);
+  // 两者好吃度同为 0.7，b 更贵 → a 的实惠度更高 → 必选 a
+  assert.equal(first.dish.id, 'a');
+});
+
+test('被评为 bad 的菜排在冷启动的菜后面', () => {
+  const events = [
+    { id: 'e1', ts: NOW - 3 * DAY, slot: 'lunch', dishId: 'd1', type: 'recommended', value: null },
+    { id: 'e2', ts: NOW - 3 * DAY + 1000, slot: 'lunch', dishId: 'd1', type: 'rated', value: 'bad' },
+  ];
+  const r = recommend({
+    dishes: [
+      dish('d1', 's1', { tags: ['川菜'] }),
+      dish('d2', 's2', { tags: ['面食'] }),
+    ],
+    shops: recShops, events, slot: 'lunch', now: NOW, random: fixedRandom,
+  });
+  assert.equal(r.dish.id, 'd2');
+});
+
+test('返回的 reason 恒为非空字符串', () => {
+  const r = recommend({
+    dishes: [dish('d1', 's1')], shops: recShops,
+    slot: 'lunch', now: NOW, random: fixedRandom,
+  });
+  assert.equal(typeof r.reason, 'string');
+  assert.ok(r.reason.length > 0);
 });

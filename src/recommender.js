@@ -1,5 +1,6 @@
 import { CONFIG } from './config.js';
-import { daysBetweenKeys } from './dates.js';
+import { daysBetweenKeys, localDateKey } from './dates.js';
+import { reduceObservations, buildEatenIndex } from './observations.js';
 
 const DAY_MS = 86400000;
 
@@ -112,4 +113,74 @@ export function reasonFor({
   if (isTopValue) return '同类里最便宜';
   if (fDish >= CONFIG.LONG_TIME_FDISH) return '好久没吃了';
   return '换换口味';
+}
+
+/**
+ * 唯一对外入口：给定候选池与全部历史事件，选出这一顿该吃什么。
+ *
+ * now 与 random 都由调用方注入 —— 这是本模块保持纯函数、可完整测试的前提。
+ */
+export function recommend({
+  dishes,
+  shops,
+  events = [],
+  slot,
+  now,
+  excludedDishIds = [],
+  random = Math.random,
+}) {
+  const candidates = filterCandidates({ dishes, shops, slot, excludedDishIds });
+  if (candidates.length === 0) return null;
+
+  const observations = reduceObservations(events);
+  const dishesById = new Map(dishes.map((d) => [d.id, d]));
+  const eaten = buildEatenIndex(observations, dishesById);
+  const nowKey = localDateKey(now);
+
+  const obsByDish = new Map();
+  for (const obs of observations) {
+    let list = obsByDish.get(obs.dishId);
+    if (!list) obsByDish.set(obs.dishId, (list = []));
+    list.push(obs);
+  }
+
+  const prices = candidates.map((d) => effectivePriceOf(d, events));
+
+  const rows = candidates.map((dish, i) => {
+    const obs = obsByDish.get(dish.id) ?? [];
+    const taste = tasteOf(obs, now);
+    const value = valueOf(prices[i], prices);
+    const fatigue = fatigueOf({
+      dishLastEatenKey: eaten.byDish.get(dish.id),
+      shopLastEatenKey: eaten.byShop.get(dish.shopId),
+      tagLastEatenKeys: (dish.tags ?? [])
+        .map((t) => eaten.byTag.get(t))
+        .filter(Boolean),
+      nowKey,
+    });
+    const base = CONFIG.W_TASTE * taste + CONFIG.W_VALUE * value;
+    const jitter =
+      CONFIG.JITTER_MIN + random() * (CONFIG.JITTER_MAX - CONFIG.JITTER_MIN);
+    return { dish, obs, taste, value, fatigue, score: base * fatigue.total * jitter };
+  });
+
+  const maxTaste = Math.max(...rows.map((r) => r.taste));
+  const maxValue = Math.max(...rows.map((r) => r.value));
+  const best = rows.reduce((a, b) => (b.score > a.score ? b : a));
+
+  let lastRatedValue = null;
+  for (const obs of best.obs) {
+    if (obs.source === 'rated') lastRatedValue = obs.ratedValue; // obs 已按 ts 升序
+  }
+
+  return {
+    dish: best.dish,
+    reason: reasonFor({
+      hasObservations: best.obs.length > 0,
+      lastRatedValue,
+      isTopTaste: best.taste === maxTaste,
+      isTopValue: best.value === maxValue,
+      fDish: best.fatigue.fDish,
+    }),
+  };
 }
