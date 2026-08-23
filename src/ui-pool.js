@@ -265,9 +265,18 @@ el('export').addEventListener('click', async () => {
     const a = document.createElement('a');
     a.href = url;
     a.download = snapshotFilename(snapshot.exportedAt);
+
+    // 必须先入文档再点：WebKit 对游离节点的下载并不可靠。
+    // revoke 也不能和 click() 挤在同一 tick —— 那样下载会静默失败。
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-    el('io-msg').textContent = `已导出 ${a.download}`;
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+    // 措辞不能断言「已导出」：浏览器是否真的落了盘、用户有没有在保存面板上
+    // 点取消，这段代码都观察不到。而这份 JSON 是用户唯一的备份（§10），
+    // 让他以为备份存在而其实没有，是这个应用里最坏的结果。
+    el('io-msg').textContent = `已生成 ${a.download}，请在「文件」App 里确认。`;
   } catch (err) {
     console.error('导出备份失败', err);
     el('io-msg').textContent = '导出失败，请稍后重试。';
