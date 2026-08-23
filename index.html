@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>今天这顿</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main class="wrap">
+  <section id="card" class="card" hidden>
+    <button id="swap" class="swap" type="button">换一个</button>
+    <p id="slot-label" class="slot-label"></p>
+    <h1 id="dish-name" class="dish-name"></h1>
+    <p id="shop-name" class="shop-name"></p>
+    <p id="price" class="price"></p>
+    <p id="reason" class="reason"></p>
+    <button id="order" class="primary" type="button">去下单</button>
+    <button id="copy-shop" class="ghost" type="button">复制店名</button>
+  </section>
+
+  <section id="empty" class="card" hidden>
+    <p class="empty-text">候选池里这一顿没有可推的。</p>
+    <a class="primary" href="pool.html">去添加菜品</a>
+  </section>
+
+  <a class="pool-link" href="pool.html">候选池</a>
+</main>
+
+<div id="feedback" class="overlay" hidden></div>
+
+<script type="module" src="src/ui-today.js"></script>
+</body>
+</html>

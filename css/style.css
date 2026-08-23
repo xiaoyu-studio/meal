@@ -1,0 +1,170 @@
+:root {
+  --bg: #faf8f5;
+  --fg: #1c1a17;
+  --muted: #6f6a63;
+  --accent: #d4622a;
+  --card: #ffffff;
+  --line: #e8e3dc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17150f;
+    --fg: #f0ece5;
+    --muted: #9a938a;
+    --accent: #ff8a4c;
+    --card: #221f19;
+    --line: #35302a;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+.wrap {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  padding: 2rem 1.5rem 1.5rem;
+}
+
+.slot-label { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.dish-name { margin: 0.25rem 0 0.5rem; font-size: 2rem; line-height: 1.25; }
+.shop-name { margin: 0; color: var(--muted); }
+.price { margin: 0.25rem 0 0; color: var(--muted); }
+.reason { margin: 1rem 0 1.5rem; color: var(--accent); }
+.empty-text { margin: 0 0 1.25rem; color: var(--muted); }
+
+.swap {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.primary {
+  display: block;
+  width: 100%;
+  padding: 1rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ghost {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pool-link {
+  display: block;
+  margin-top: 2rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.overlay[hidden] { display: none; }
+
+.sheet {
+  width: 100%;
+  max-width: 34rem;
+  background: var(--card);
+  border-radius: 1.25rem 1.25rem 0 0;
+  padding: 1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+}
+
+.fb-question { margin: 0 0 1.25rem; font-size: 1.1rem; }
+
+.fb-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.fb-buttons button {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: none;
+  color: var(--fg);
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.fb-extra {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fb-price-box { display: flex; gap: 0.5rem; margin-top: 1rem; }
+.fb-price-box[hidden] { display: none; }
+.fb-price-box input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1rem;
+}
+.fb-price-box button {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
