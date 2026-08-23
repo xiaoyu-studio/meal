@@ -247,8 +247,21 @@ el('export').addEventListener('click', async () => {
 el('import').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
+
+  // 解析和导入分两个 try：JSON.parse 抛的是引擎原生英文错误
+  // （例如 "Unexpected token o in JSON at position 1"），不能直接
+  // 显示给用户；只有 importSnapshot 自己抛出的才是可信的中文提示。
+  let parsed;
   try {
-    await importSnapshot(JSON.parse(await file.text()));
+    parsed = JSON.parse(await file.text());
+  } catch {
+    el('io-msg').textContent = '导入失败：文件不是有效的 JSON 备份。';
+    e.target.value = '';
+    return;
+  }
+
+  try {
+    await importSnapshot(parsed);
     el('io-msg').textContent = '导入成功。';
     await render();
   } catch (err) {
