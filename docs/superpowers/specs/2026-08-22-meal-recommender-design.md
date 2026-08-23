@@ -120,6 +120,7 @@ iOS 从不要求 Service Worker 才能「添加到主屏幕」，`display: stand
 | `dishId` | string | 外键 → `dishes.id` |
 | `type` | 见下 | 事件类型 |
 | `value` | number \| string \| null | 见下 |
+| `targetTs` | number（可选） | 回指所评观察值的 `ts`。仅 `rated` / `paid` / `sick` 写入；其余类型与历史事件、导入的旧快照都没有此字段 |
 
 `type` 取值与 `value` 语义：
 
@@ -131,6 +132,8 @@ iOS 从不要求 Service Worker 才能「添加到主屏幕」，`display: stand
 | `rated` | `'good' \| 'ok' \| 'bad' \| 'skipped'` | 用户在反馈浮层打分时 |
 | `paid` | number（元） | 用户填写实付价时 |
 | `sick` | `null` | 用户点「吃坏了」时（同时将该店 `hygiene` 置为 `blocked`） |
+
+`targetTs` 的存在是因为反馈是**补问上一顿**的：写入时今天这顿的 `recommended` 事件早已落库，若今天推的恰好是同一道菜、同一饭点，仅凭时间先后无法分辨这条评分该算给哪一顿。有了显式回指就不必再猜。
 
 **只存事件流，不存聚合分数。** 这样「推了但既没点也没换」本身就是一条可分析的记录，同时评分公式可以随时修改并对全部历史重算。
 
@@ -155,7 +158,11 @@ recommend({ dishes, shops, events, slot, now, excludedDishIds }) -> { dish, reas
 
 ### 6.2 从事件流归约出观察值
 
-以一次 `recommended` 事件为起点，**同一本地日期、同一 `slot`、同一 `dishId`** 的后续事件构成一个 observation。所有日期与「天数差」的计算一律按设备本地时区取自然日。归约按优先级取第一个命中的：
+以一次 `recommended` 事件为起点，**同一本地日期、同一 `slot`、同一 `dishId`** 的后续事件构成一个 observation。所有日期与「天数差」的计算一律按设备本地时区取自然日。
+
+**后续事件归属哪一组**：事件带 `targetTs` 时精确匹配 `ts` 等于该值的那一组；没有 `targetTs`（历史事件、导入的旧快照），或它指向的组已不存在时，退回启发式 —— 取同 `slot`、同 `dishId` 中 `ts` 最大且 `<= event.ts` 的那一组。
+
+归约按优先级取第一个命中的：
 
 1. 存在 `rated` → 用其映射值
 2. 否则存在 `swapped` → `0.2`
@@ -304,7 +311,9 @@ const CONFIG = {
 上顿的黄焖鸡怎么样？　[好吃] [还行] [不了] [没吃成]
 ```
 
-四个大按钮，点任意一个即写入 `rated` 事件并关闭浮层。目标是**一次点击结束**。
+四个大按钮，点任意一个即写入 `rated` 事件并关闭浮层。目标是**一次点击结束**。写入的 `rated` / `paid` / `sick` 均带上被问那条 observation 的 `ts` 作为 `targetTs`（见 §5.3）。
+
+浮层正在问的那道菜，**这一顿不再推**：它的 `dishId` 会被加进 `excludedDishIds`。一边问「上顿的黄焖鸡怎么样」一边又端上同一道黄焖鸡是荒唐的。但候选池小到剔除后无菜可推时，宁可重复也不显示「没有可推的」。
 
 下方一行小字，均为选填：
 

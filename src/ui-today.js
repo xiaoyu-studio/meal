@@ -77,8 +77,11 @@ async function renderFeedback() {
 
       try {
         if (button.dataset.rate) {
+          // targetTs 回指被问的那一顿。写入时 render() 已经把今天这顿的
+          // recommended 事件追加进去了，若今天推的恰好是同一道菜，没有这个
+          // 回指，这条评分会落到今天那一组上。
           await appendEvent({
-            slot: target.slot, dishId: target.dishId,
+            slot: target.slot, dishId: target.dishId, targetTs: target.ts,
             type: 'rated', value: button.dataset.rate,
           });
           close();
@@ -87,9 +90,12 @@ async function renderFeedback() {
         }
 
         if (button.dataset.action === 'sick') {
-          await appendEvent({ slot: target.slot, dishId: target.dishId, type: 'sick' });
           await appendEvent({
-            slot: target.slot, dishId: target.dishId, type: 'rated', value: 'bad',
+            slot: target.slot, dishId: target.dishId, targetTs: target.ts, type: 'sick',
+          });
+          await appendEvent({
+            slot: target.slot, dishId: target.dishId, targetTs: target.ts,
+            type: 'rated', value: 'bad',
           });
           if (shop) await setHygiene(shop.id, 'blocked');
           close();
@@ -107,7 +113,8 @@ async function renderFeedback() {
           const amount = Number(overlay.querySelector('.fb-price-box input').value);
           if (Number.isFinite(amount) && amount > 0) {
             await appendEvent({
-              slot: target.slot, dishId: target.dishId, type: 'paid', value: amount,
+              slot: target.slot, dishId: target.dishId, targetTs: target.ts,
+              type: 'paid', value: amount,
             });
           }
           overlay.querySelector('.fb-price-box').hidden = true;
@@ -142,10 +149,22 @@ async function render() {
     }
 
     if (!dish) {
-      const result = recommend({
-        dishes, shops, events, slot, now,
-        excludedDishIds: pick.swappedDishIds,
-      });
+      // 正在补问的那道菜这一顿不再推：不能一边问「上顿的黄焖鸡怎么样」
+      // 一边又端上同一道黄焖鸡。
+      const asking = pendingFeedback(reduceObservations(events), now, slot);
+      const excludedDishIds = asking
+        ? [...pick.swappedDishIds, asking.dishId]
+        : pick.swappedDishIds;
+
+      // 但候选池小到只剩它时，宁可重复推荐也不能显示「没有可推的」。
+      const result =
+        recommend({ dishes, shops, events, slot, now, excludedDishIds }) ??
+        (asking
+          ? recommend({
+              dishes, shops, events, slot, now,
+              excludedDishIds: pick.swappedDishIds,
+            })
+          : null);
       if (result) {
         dish = result.dish;
         reason = result.reason;

@@ -6,7 +6,8 @@ import { localDateKey } from './dates.js';
  *
  * 两步处理：
  * Pass 1: 从 recommended 事件构建规范组（分组键：dateKey|slot|dishId）
- * Pass 2: 将其他事件附加到最近的（ts 最大但 <= event.ts）匹配组
+ * Pass 2: 把其他事件附加到目标组 —— 事件带 targetTs 时精确匹配 ts 相同的那组，
+ *         否则退回启发式：最近的（ts 最大但 <= event.ts）匹配组
  *
  * 这样既能保留跨天历史，又能处理后序事件（例如评分可能在第二天）。
  */
@@ -53,7 +54,7 @@ export function reduceObservations(events) {
     groupList.sort((a, b) => a.ts - b.ts);
   }
 
-  // Pass 2: 将非 recommended 事件附加到最近的匹配组
+  // Pass 2: 将非 recommended 事件附加到目标组
   for (const e of events) {
     if (e.type === 'recommended') continue;
 
@@ -61,13 +62,24 @@ export function reduceObservations(events) {
     const candidates = groupsBySlotDish.get(slotDishKey);
     if (!candidates) continue;
 
-    // 找到满足 group.ts <= e.ts 的最大 ts 的组
     let targetGroup = null;
-    for (const group of candidates) {
-      if (group.ts <= e.ts) {
-        targetGroup = group;
-      } else {
-        break; // 因为列表已排序，后续都不符合
+
+    // 反馈浮层写 rated / paid / sick 时会带上被问那一组的 ts。
+    // 有它就精确落到那一组 —— 否则「今天又推了同一道菜」会把昨天的评分
+    // 抢走：既丢了用户对昨天那顿的表态，又让今天这顿被误标为已评分。
+    if (e.targetTs != null) {
+      targetGroup = candidates.find((g) => g.ts === e.targetTs) ?? null;
+    }
+
+    // 没有 targetTs（旧事件、导入的快照），或它指向的组已不存在时，
+    // 退回原启发式：找到满足 group.ts <= e.ts 的最大 ts 的组。
+    if (!targetGroup) {
+      for (const group of candidates) {
+        if (group.ts <= e.ts) {
+          targetGroup = group;
+        } else {
+          break; // 因为列表已排序，后续都不符合
+        }
       }
     }
 

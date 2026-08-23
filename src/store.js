@@ -78,8 +78,14 @@ export async function setHygiene(shopId, hygiene) {
   await putShop({ ...shop, hygiene });
 }
 
-export async function appendEvent({ slot, dishId, type, value = null }) {
+/**
+ * targetTs 是可选的回指：反馈事件（rated / paid / sick）用它指明自己评的是
+ * 哪一条观察值。不传就不写这个字段 —— 旧事件与导入的快照没有它，归约那边
+ * 会退回启发式，因此不需要任何迁移。
+ */
+export async function appendEvent({ slot, dishId, type, value = null, targetTs = null }) {
   const event = { id: newId(), ts: Date.now(), slot, dishId, type, value };
+  if (targetTs != null) event.targetTs = targetTs;
   await run('events', 'readwrite', (s) => s.add(event));
   return event;
 }

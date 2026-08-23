@@ -135,6 +135,65 @@ test('多个 rated 事件，最后一个赢', () => {
   assert.equal(obs[0].ratedValue, 'good');
 });
 
+test('带 targetTs 的事件落到指定的那一组，即使之后有更新的同菜同饭点组', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'd1', at(0, 12)),
+    ev('recommended', 'd1', at(1, 12)),
+    { ...ev('rated', 'd1', at(1, 12) + 60000, 'lunch', 'good'), targetTs: at(0, 12) },
+  ]);
+  assert.equal(obs.length, 2);
+  const [day0, day1] = obs;
+  assert.equal(day0.dateKey, '2026-08-22');
+  assert.equal(day0.source, 'rated');
+  assert.equal(day0.value, 1.0);
+  assert.equal(day1.dateKey, '2026-08-23');
+  assert.equal(day1.source, 'none');
+  assert.equal(day1.eaten, false);
+});
+
+test('没有 targetTs 的事件仍走「最近先于它的那一组」启发式', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'd1', at(0, 12)),
+    ev('recommended', 'd1', at(1, 12)),
+    ev('rated', 'd1', at(1, 12) + 60000, 'lunch', 'good'),
+  ]);
+  assert.equal(obs.length, 2);
+  assert.equal(obs[0].source, 'none'); // 第一天没被评上
+  assert.equal(obs[1].source, 'rated');
+  assert.equal(obs[1].value, 1.0);
+});
+
+test('targetTs 指向的组已不存在时退回启发式，事件不丢', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'd1', at(1, 12)),
+    { ...ev('rated', 'd1', at(1, 13), 'lunch', 'ok'), targetTs: at(0, 12) },
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].source, 'rated');
+  assert.equal(obs[0].value, 0.5);
+});
+
+test('连续两天推同一道菜，第二天补评第一天：评分不被今天抢走', () => {
+  // 8/22 午餐推了 A（无动作）；8/23 午餐又推了 A，浮层补问 8/22 那顿，
+  // 用户点「好吃」。评分必须落在 8/22，8/23 那顿仍是未评分状态。
+  const obs = reduceObservations([
+    ev('recommended', 'A', at(0, 12)),
+    ev('recommended', 'A', at(1, 12)),
+    { ...ev('rated', 'A', at(1, 12) + 30000, 'lunch', 'good'), targetTs: at(0, 12) },
+  ]);
+  assert.deepEqual(
+    obs.map((o) => [o.dateKey, o.source, o.value, o.eaten]),
+    [
+      ['2026-08-22', 'rated', 1.0, true],
+      ['2026-08-23', 'none', 0.45, false],
+    ],
+  );
+
+  // 而且 8/23 那顿仍会在第三天被补问 —— 没有被误标成已评分。
+  const nextDay = new Date(2026, 7, 24, 12, 0).getTime();
+  assert.equal(pendingFeedback(obs, nextDay, 'lunch').dateKey, '2026-08-23');
+});
+
 const dishesById = new Map([
   ['d1', { id: 'd1', shopId: 's1', tags: ['川菜', '辣'] }],
   ['d2', { id: 'd2', shopId: 's1', tags: ['川菜'] }],
@@ -287,6 +346,17 @@ test('currentPick 在刚换掉还没推新的时返回 null', () => {
   ], 'lunch', '2026-08-22');
   assert.equal(p.activeDishId, null);
   assert.equal(p.swapCount, 1);
+});
+
+test('currentPick 对同一道菜的重复 swapped 只计一次（防连点烧掉两次机会）', () => {
+  const p = currentPick([
+    evt('recommended', 'a', 12, 0),
+    evt('swapped', 'a', 12, 1),
+    evt('swapped', 'a', 12, 2),
+  ], 'lunch', '2026-08-22');
+  assert.deepEqual(p.swappedDishIds, ['a']);
+  assert.equal(p.swapCount, 1);
+  assert.equal(p.activeDishId, null);
 });
 
 test('currentPick 忽略其他饭点和其他日期的事件', () => {
