@@ -1,0 +1,2 @@
+# core.autocrlf 在 Windows 上默认开着。图标是主屏入口，绝不能被换行转换弄坏。
+*.png binary

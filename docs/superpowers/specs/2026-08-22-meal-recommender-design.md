@@ -351,6 +351,8 @@ const CONFIG = {
 
 GitHub Pages，仓库路径 `/meal/`。需包含 `manifest.json`（`display: standalone`、图标、`name`、`short_name`）与 `apple-mobile-web-app-capable` meta 标签。
 
+图标必须提供**位图**：iOS 不认 SVG 的 `apple-touch-icon`，取不到位图时会拿页面截图当主屏图标 —— 而主屏图标就是这个 app 的全部入口。因此仓库里有 `apple-touch-icon.png`（180×180，满幅不留圆角，圆角由 iOS 自己的遮罩加）与 `icon-192.png` / `icon-512.png`（manifest 用，保留圆角与透明背景），均由 `tools/make-icons.mjs` 从 `icon.svg` 的同一套形状生成。该脚本只用 Node 自带的 zlib，是一次性资源生成，不引入任何运行时依赖。
+
 ## 9. 测试策略
 
 ### 9.1 自动化测试
