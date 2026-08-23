@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterCandidates, tasteOf } from '../src/recommender.js';
+import { filterCandidates, tasteOf, effectivePriceOf, valueOf } from '../src/recommender.js';
 import { CONFIG } from '../src/config.js';
 
 const DAY = 86400000;
@@ -112,4 +112,59 @@ test('近期评价压过久远评价', () => {
 test('结果恒在 [0,1] 区间内', () => {
   const t = tasteOf([o(0.65, 3), o(0.2, 10), o(0.45, 30)], NOW);
   assert.ok(t >= 0 && t <= 1);
+});
+
+const paidEvt = (dishId, ts, amount) => ({
+  id: `p${ts}`, ts, slot: 'lunch', dishId, type: 'paid', value: amount,
+});
+
+test('effectivePriceOf 无 paid 事件时用参考价', () => {
+  assert.equal(effectivePriceOf(dish('d1', 's1', { refPrice: 25 }), []), 25);
+});
+
+test('effectivePriceOf 优先用实付价', () => {
+  const d = dish('d1', 's1', { refPrice: 25 });
+  assert.equal(effectivePriceOf(d, [paidEvt('d1', 1000, 31.5)]), 31.5);
+});
+
+test('effectivePriceOf 取最近一次实付价', () => {
+  const d = dish('d1', 's1', { refPrice: 25 });
+  const events = [paidEvt('d1', 1000, 31.5), paidEvt('d1', 5000, 28)];
+  assert.equal(effectivePriceOf(d, events), 28);
+});
+
+test('effectivePriceOf 忽略别的菜的实付价', () => {
+  const d = dish('d1', 's1', { refPrice: 25 });
+  assert.equal(effectivePriceOf(d, [paidEvt('d2', 5000, 99)]), 25);
+});
+
+test('valueOf 在候选集只有一个时返回 0.5', () => {
+  assert.equal(valueOf(20, [20]), 0.5);
+});
+
+test('valueOf 给最便宜的满分、最贵的零分', () => {
+  const prices = [10, 20, 30];
+  assert.equal(valueOf(10, prices), 1);
+  assert.equal(valueOf(20, prices), 0.5);
+  assert.equal(valueOf(30, prices), 0);
+});
+
+test('valueOf 对并列价格给相同分数', () => {
+  const prices = [10, 10, 20];
+  assert.equal(valueOf(10, prices), valueOf(10, prices));
+  assert.equal(valueOf(10, prices), 1);
+  assert.equal(valueOf(20, prices), 0);
+});
+
+test('valueOf 自适应消费水平，只看相对位置', () => {
+  // 绝对价格翻十倍，相对排序不变，分数也不变
+  assert.equal(valueOf(20, [10, 20, 30]), valueOf(200, [100, 200, 300]));
+});
+
+test('valueOf 结果恒在 [0,1] 区间内', () => {
+  const prices = [8, 15, 22, 40, 40, 6];
+  for (const p of prices) {
+    const v = valueOf(p, prices);
+    assert.ok(v >= 0 && v <= 1, `${p} → ${v}`);
+  }
 });

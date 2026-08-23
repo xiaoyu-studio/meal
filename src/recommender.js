@@ -38,3 +38,25 @@ export function tasteOf(observations, nowTs) {
   }
   return numerator / denominator;
 }
+
+/** 这道菜的有效价格：优先用最近一次实付价，没有才用参考价。 */
+export function effectivePriceOf(dish, events) {
+  let latest = null;
+  for (const e of events) {
+    if (e.type !== 'paid' || e.dishId !== dish.id) continue;
+    if (latest === null || e.ts > latest.ts) latest = e;
+  }
+  return latest ? latest.value : dish.refPrice;
+}
+
+/**
+ * 实惠度 ∈ [0,1] = 1 - 该价格在候选集中的百分位。
+ * 用相对位置而非绝对金额，因此永远不必定义"多少钱算便宜"。
+ * 并列价格取相同（较优）分数。
+ */
+export function valueOf(price, allPrices) {
+  if (allPrices.length <= 1) return 0.5;
+  const cheaperCount = allPrices.filter((p) => p < price).length;
+  const percentile = cheaperCount / (allPrices.length - 1);
+  return 1 - Math.min(1, Math.max(0, percentile));
+}
