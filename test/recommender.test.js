@@ -174,3 +174,84 @@ test('valueOf 结果恒在 [0,1] 区间内', () => {
     assert.ok(v >= 0 && v <= 1, `${p} → ${v}`);
   }
 });
+
+import { fatigueOf } from '../src/recommender.js';
+
+const TODAY = '2026-08-22';
+const daysBefore = (n) => {
+  const d = new Date(2026, 7, 22);
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+test('从未吃过时三个因子都是 1', () => {
+  const f = fatigueOf({ nowKey: TODAY });
+  assert.equal(f.fDish, 1);
+  assert.equal(f.fShop, 1);
+  assert.equal(f.fTag, 1);
+  assert.equal(f.total, 1);
+});
+
+test('今天刚吃过这道菜时被压到下限', () => {
+  const f = fatigueOf({ dishLastEatenKey: TODAY, nowKey: TODAY });
+  assert.equal(f.fDish, 0);
+  assert.equal(f.total, CONFIG.FATIGUE_FLOOR);
+});
+
+test('菜品衰减符合 1 - exp(-d/7)', () => {
+  const f = fatigueOf({ dishLastEatenKey: daysBefore(7), nowKey: TODAY });
+  assert.ok(Math.abs(f.fDish - (1 - Math.exp(-1))) < 1e-9);
+  assert.ok(Math.abs(f.fDish - 0.6321205588) < 1e-6, `实际 ${f.fDish}`);
+});
+
+test('菜品衰减的手感符合 spec 给出的四个刻度', () => {
+  const at = (n) => fatigueOf({ dishLastEatenKey: daysBefore(n), nowKey: TODAY }).fDish;
+  assert.ok(Math.abs(at(3) - 0.35) < 0.01, `3 天 → ${at(3)}`);
+  assert.ok(Math.abs(at(7) - 0.63) < 0.01, `7 天 → ${at(7)}`);
+  assert.ok(Math.abs(at(14) - 0.86) < 0.01, `14 天 → ${at(14)}`);
+  assert.ok(Math.abs(at(30) - 0.99) < 0.01, `30 天 → ${at(30)}`);
+});
+
+test('店铺衰减的惩罚上限为 50%', () => {
+  const sameDay = fatigueOf({ shopLastEatenKey: TODAY, nowKey: TODAY });
+  assert.equal(sameDay.fShop, 0.5);
+  const f = fatigueOf({ shopLastEatenKey: daysBefore(3), nowKey: TODAY });
+  assert.ok(Math.abs(f.fShop - (1 - 0.5 * Math.exp(-1))) < 1e-9);
+});
+
+test('tag 衰减的惩罚上限为 30%', () => {
+  const sameDay = fatigueOf({ tagLastEatenKeys: [TODAY], nowKey: TODAY });
+  assert.ok(Math.abs(sameDay.fTag - 0.7) < 1e-9);
+  const f = fatigueOf({ tagLastEatenKeys: [daysBefore(2)], nowKey: TODAY });
+  assert.ok(Math.abs(f.fTag - (1 - 0.3 * Math.exp(-1))) < 1e-9);
+});
+
+test('多个 tag 时最近吃过的那个说了算', () => {
+  const f = fatigueOf({
+    tagLastEatenKeys: [daysBefore(30), daysBefore(1)], nowKey: TODAY,
+  });
+  const onlyRecent = fatigueOf({ tagLastEatenKeys: [daysBefore(1)], nowKey: TODAY });
+  assert.equal(f.fTag, onlyRecent.fTag);
+});
+
+test('空 tag 数组等同于从未吃过', () => {
+  assert.equal(fatigueOf({ tagLastEatenKeys: [], nowKey: TODAY }).fTag, 1);
+});
+
+test('total 是三个因子之积', () => {
+  const f = fatigueOf({
+    dishLastEatenKey: daysBefore(10),
+    shopLastEatenKey: daysBefore(4),
+    tagLastEatenKeys: [daysBefore(2)],
+    nowKey: TODAY,
+  });
+  assert.ok(Math.abs(f.total - f.fDish * f.fShop * f.fTag) < 1e-9);
+});
+
+test('total 恒在 (0,1] 区间内', () => {
+  const f = fatigueOf({
+    dishLastEatenKey: TODAY, shopLastEatenKey: TODAY,
+    tagLastEatenKeys: [TODAY], nowKey: TODAY,
+  });
+  assert.ok(f.total > 0 && f.total <= 1);
+});

@@ -1,4 +1,5 @@
 import { CONFIG } from './config.js';
+import { daysBetweenKeys } from './dates.js';
 
 const DAY_MS = 86400000;
 
@@ -59,4 +60,37 @@ export function valueOf(price, allPrices) {
   const cheaperCount = allPrices.filter((p) => p < price).length;
   const percentile = cheaperCount / (allPrices.length - 1);
   return 1 - Math.min(1, Math.max(0, percentile));
+}
+
+/**
+ * 腻味系数 ∈ (0,1]：最近吃过的降权。
+ * 菜品衰减最重（可归零），店铺次之（上限 50%），tag 最轻（上限 30%）——
+ * 目的是防止连着三顿都是同一家店或同一个菜系。
+ *
+ * 单独返回 fDish 是因为理由生成的「好久没吃了」判据看的是它，不是 total。
+ */
+export function fatigueOf({
+  dishLastEatenKey,
+  shopLastEatenKey,
+  tagLastEatenKeys = [],
+  nowKey,
+}) {
+  const dDish = daysBetweenKeys(dishLastEatenKey, nowKey);
+  const dShop = daysBetweenKeys(shopLastEatenKey, nowKey);
+  const tagDays = tagLastEatenKeys.map((k) => daysBetweenKeys(k, nowKey));
+  const dTag = tagDays.length ? Math.min(...tagDays) : Infinity;
+
+  const fDish =
+    dDish === Infinity ? 1 : 1 - Math.exp(-dDish / CONFIG.FATIGUE_TAU_DISH);
+  const fShop =
+    dShop === Infinity
+      ? 1
+      : 1 - CONFIG.FATIGUE_MAX_SHOP_PENALTY * Math.exp(-dShop / CONFIG.FATIGUE_TAU_SHOP);
+  const fTag =
+    dTag === Infinity
+      ? 1
+      : 1 - CONFIG.FATIGUE_MAX_TAG_PENALTY * Math.exp(-dTag / CONFIG.FATIGUE_TAU_TAG);
+
+  const total = Math.max(CONFIG.FATIGUE_FLOOR, fDish * fShop * fTag);
+  return { total, fDish, fShop, fTag };
 }
