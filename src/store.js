@@ -6,6 +6,12 @@ const STORES = ['shops', 'dishes', 'events'];
 
 let dbPromise = null;
 
+/**
+ * 注意：这里没有 onblocked 处理器。DB_VERSION 恒为 1 时不会触发它 ——
+ * 但**任何一次 DB_VERSION 升版前必须先补上**：只要还有一个旧标签页开着
+ * 这个库，open() 就会一直 blocked 且没有超时，Promise 永远不落地，
+ * 页面停在空白卡片上。届时至少要 reject 一个中文错误提示用户关掉其他标签页。
+ */
 function openDB() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
@@ -34,6 +40,10 @@ function run(store, mode, fn) {
         const tx = db.transaction(store, mode);
         const req = fn(tx.objectStore(store));
         tx.onerror = () => reject(tx.error);
+        // abort 不一定伴随请求错误：WebKit 会在页面被挂起（切到别的 App）时
+        // 直接中断进行中的事务。不接这个事件，Promise 就永远悬着 ——
+        // loadAll() 不返回、render() 的 catch 不执行、失败态和重试按钮都不出现。
+        tx.onabort = () => reject(tx.error ?? new Error('事务被中断'));
         tx.oncomplete = () => resolve(req ? req.result : undefined);
       }),
   );
@@ -101,6 +111,10 @@ export async function importSnapshot(obj) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORES, 'readwrite');
     tx.onerror = () => reject(tx.error);
+    // 同 run()：页面挂起导致的 abort 必须让 Promise 落地。
+    // 下面 catch 里那次主动 tx.abort() 会先 reject 真正的错误，
+    // 之后这个处理器再触发也只是对已 settle 的 Promise 的空操作。
+    tx.onabort = () => reject(tx.error ?? new Error('导入失败：事务被中断'));
     tx.oncomplete = () => resolve();
     try {
       for (const name of STORES) {
@@ -109,8 +123,10 @@ export async function importSnapshot(obj) {
         for (const row of data[name]) store.put(row);
       }
     } catch (err) {
-      tx.abort();
+      // 先 reject 再 abort：无论 abort 事件何时派发，用户看到的都是
+      // 真正的原因，而不是笼统的「事务被中断」。
       reject(err);
+      tx.abort();
     }
   });
 }
