@@ -19,7 +19,10 @@ function openDB() {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      dbPromise = null;
+      reject(req.error);
+    };
   });
   return dbPromise;
 }
@@ -93,10 +96,15 @@ export async function importSnapshot(obj) {
     const tx = db.transaction(STORES, 'readwrite');
     tx.onerror = () => reject(tx.error);
     tx.oncomplete = () => resolve();
-    for (const name of STORES) {
-      const store = tx.objectStore(name);
-      store.clear();
-      for (const row of data[name]) store.put(row);
+    try {
+      for (const name of STORES) {
+        const store = tx.objectStore(name);
+        store.clear();
+        for (const row of data[name]) store.put(row);
+      }
+    } catch (err) {
+      tx.abort();
+      reject(err);
     }
   });
 }
