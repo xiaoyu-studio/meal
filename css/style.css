@@ -168,3 +168,55 @@ body {
   color: #fff;
   cursor: pointer;
 }
+
+.page-title { font-size: 1.5rem; margin: 1rem 0 1.25rem; }
+.form-title { font-size: 1rem; margin: 0 0 0.75rem; color: var(--muted); }
+
+.form {
+  display: grid;
+  gap: 0.75rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.form input,
+.form select {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.io-row { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; }
+.io-row > * { flex: 1; margin-top: 0; }
+.import-label { text-align: center; }
+.io-msg { min-height: 1.5rem; color: var(--muted); font-size: 0.85rem; margin: 0 0 1rem; }
+
+.shop-block {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.shop-head { display: flex; justify-content: space-between; align-items: baseline; }
+.shop-title { font-size: 1.1rem; font-weight: 600; margin: 0; }
+.shop-meta { color: var(--muted); font-size: 0.8rem; }
+.shop-blocked { color: var(--accent); }
+
+.dish-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.dish-stat { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
