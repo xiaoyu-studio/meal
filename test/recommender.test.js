@@ -133,6 +133,12 @@ test('effectivePriceOf 取最近一次实付价', () => {
   assert.equal(effectivePriceOf(d, events), 28);
 });
 
+test('effectivePriceOf 在事件乱序时仍取 ts 最大的一条', () => {
+  const d = dish('d1', 's1', { refPrice: 25 });
+  const events = [paidEvt('d1', 5000, 28), paidEvt('d1', 1000, 31.5)];
+  assert.equal(effectivePriceOf(d, events), 28);
+});
+
 test('effectivePriceOf 忽略别的菜的实付价', () => {
   const d = dish('d1', 's1', { refPrice: 25 });
   assert.equal(effectivePriceOf(d, [paidEvt('d2', 5000, 99)]), 25);
