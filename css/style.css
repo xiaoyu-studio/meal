@@ -181,6 +181,9 @@ body {
   padding: 1.25rem;
   margin-bottom: 1.5rem;
 }
+/* display: grid 是作者级声明，会盖掉浏览器默认的 [hidden] { display: none }。
+   不补这条，JS 里设 .hidden = true 对表单毫无作用。同 .overlay / .fb-price-box。 */
+.form[hidden] { display: none; }
 
 .form input,
 .form select {
@@ -193,6 +196,7 @@ body {
 }
 
 .io-row { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; }
+.io-row[hidden] { display: none; }  /* 同上：display: flex 会盖掉 [hidden] */
 .io-row > * { flex: 1; margin-top: 0; }
 .import-label { text-align: center; }
 .io-msg { min-height: 1.5rem; color: var(--muted); font-size: 0.85rem; margin: 0 0 1rem; }

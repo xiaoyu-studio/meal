@@ -36,10 +36,29 @@ function isSafeLink(link) {
   }
 }
 
+/**
+ * 失败态下把失败卡片以外的一切收起来，跟 ui-today 的排他式失败态对齐。
+ *
+ * 真正非收不可的是「导入备份」：importSnapshot 先 clear 三个 store 再写入，
+ * 而看到「读取失败」的人很自然会想拿备份修一修。万一碰上读坏了写还正常的
+ * 部分故障，一份格式合法但过期的备份就会静默盖掉现有数据 —— 用一次读错误
+ * 换来一次不可逆的丢数据。导出和「加一家店」收起来只是顺带：留着它们，
+ * 用户会对着一个看起来能用的表单白填一遍。
+ *
+ * 注意 .io-row / .form 在 CSS 里是 flex / grid，必须配合各自的 [hidden]
+ * 规则才收得掉（见 css/style.css）。
+ */
+function setControlsHidden(hidden) {
+  el('io-row').hidden = hidden;
+  el('io-msg').hidden = hidden;
+  el('shop-form').hidden = hidden;
+}
+
 /** 本地存储读不出来时兜底展示的失败态。 */
 function showFailure(err) {
   console.error('渲染候选池失败', err);
   el('shops').innerHTML = '';
+  setControlsHidden(true);
   el('failure-text').textContent = '本地存储读取失败，请稍后重试。';
   el('failure').hidden = false;
 }
@@ -126,6 +145,7 @@ async function render() {
       .join('');
 
     el('failure').hidden = true;
+    setControlsHidden(false);
   } catch (err) {
     showFailure(err);
   }
