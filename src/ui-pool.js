@@ -8,7 +8,11 @@ import {
 } from './store.js';
 
 const el = (id) => document.getElementById(id);
-const PLATFORM_LABELS = { meituan: '美团', eleme: '饿了么' };
+/**
+ * 只是显示用的名字。存库的值一律保持 'meituan' / 'eleme' 不变 ——
+ * 平台改名跟数据无关，改了 key 会让已有记录和导出的备份全部对不上。
+ */
+const PLATFORM_LABELS = { meituan: '美团外卖', eleme: '淘宝闪购' };
 const HYGIENE_LABELS = { unknown: '未知', trusted: '放心', blocked: '已拉黑' };
 
 /**
@@ -52,6 +56,32 @@ function setControlsHidden(hidden) {
   el('io-row').hidden = hidden;
   el('io-msg').hidden = hidden;
   el('shop-form').hidden = hidden;
+}
+
+let toastTimer = null;
+
+/**
+ * 屏幕底部的一次性提示。删店、导入这类「做完了但当场看不出变化」的操作
+ * 需要它 —— #io-msg 是页面顶部那行小灰字，用户滚到下面操作时根本看不见。
+ */
+function showToast(text) {
+  const t = el('toast');
+  t.textContent = text;
+  t.hidden = false;
+  // 同一 tick 里 hidden=false 和加 class 会被合并成一次样式计算，过渡不触发。
+  // 读一次 offsetWidth 强制重排，把两者分开。
+  void t.offsetWidth;
+  t.classList.add('toast-show');
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    t.classList.remove('toast-show');
+    // 淡出结束再收起来。这期间若又弹了新的 toast，toast-show 会被重新加上，
+    // 那就不能再 hidden —— 所以收起前必须确认它确实还处在淡出状态。
+    setTimeout(() => {
+      if (!t.classList.contains('toast-show')) t.hidden = true;
+    }, 200);
+  }, 2400);
 }
 
 /** 本地存储读不出来时兜底展示的失败态。 */
@@ -129,7 +159,7 @@ async function render() {
             ${rows}
             <form class="form" data-dish-form="${esc(shop.id)}">
               <input name="name" placeholder="菜名" required>
-              <input name="refPrice" type="number" step="0.5" placeholder="参考价" required>
+              <input name="refPrice" type="number" step="0.01" inputmode="decimal" placeholder="参考价" required>
               <input name="tags" placeholder="标签，逗号分隔（如：川菜,辣）">
               <label class="shop-meta">适用饭点</label>
               ${SLOTS.map(
@@ -237,16 +267,22 @@ el('shops').addEventListener('click', async (e) => {
   try {
     if (button.dataset.delDish) {
       if (confirm('删掉这道菜？历史记录会保留。')) {
+        const { dishes } = await loadAll();
+        const name = dishes.find((d) => d.id === button.dataset.delDish)?.name;
         await deleteDish(button.dataset.delDish);
         await render();
+        showToast(name ? `已删除「${name}」` : '已删除');
       }
       return;
     }
 
     if (button.dataset.delShop) {
       if (confirm('删掉这家店？它名下所有菜品也会一并删除。')) {
+        const { shops } = await loadAll();
+        const name = shops.find((s) => s.id === button.dataset.delShop)?.name;
         await deleteShop(button.dataset.delShop);
         await render();
+        showToast(name ? `已删除「${name}」及其菜品` : '已删除');
       }
       return;
     }
@@ -321,8 +357,10 @@ el('import').addEventListener('change', async (e) => {
 
   try {
     await importSnapshot(parsed);
+    const { shops, dishes } = await loadAll();
     el('io-msg').textContent = '导入成功。';
     await render();
+    showToast(`已导入 ${shops.length} 家店、${dishes.length} 道菜`);
   } catch (err) {
     // importSnapshot 校验失败时旧数据分毫不动 —— 把它抛出的中文错误原样
     // 显示出来，绝不能吞掉让用户以为导入成功了。

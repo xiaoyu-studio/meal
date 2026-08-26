@@ -30,8 +30,8 @@
     <h2 class="form-title">加一家店</h2>
     <input name="name" placeholder="店名" required>
     <select name="platform">
-      <option value="meituan">美团</option>
-      <option value="eleme">饿了么</option>
+      <option value="meituan">美团外卖</option>
+      <option value="eleme">淘宝闪购（原饿了么）</option>
     </select>
     <input name="link" type="url" placeholder="从外卖 App 分享出来的链接" required>
     <select name="hygiene">
@@ -50,6 +50,8 @@
 
   <div id="shops"></div>
 </main>
+
+<div id="toast" class="toast" hidden></div>
 
 <script type="module" src="src/ui-pool.js"></script>
 </body>

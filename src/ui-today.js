@@ -59,7 +59,7 @@ async function renderFeedback() {
           <button type="button" class="link" data-action="price">填实付价</button>
         </div>
         <div class="fb-price-box" hidden>
-          <input type="number" inputmode="decimal" placeholder="实付价（元）">
+          <input type="number" step="0.01" inputmode="decimal" placeholder="实付价（元）">
           <button type="button" data-action="save-price">保存</button>
         </div>
       </div>

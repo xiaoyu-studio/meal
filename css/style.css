@@ -195,6 +195,39 @@ body {
   font-size: 1rem;
 }
 
+/* 操作成功的即时反馈。#io-msg 那行小灰字在页面顶部，用户在下面删店时
+   根本看不见 —— 这个固定在屏幕底部，无论滚到哪儿都会跳出来。 */
+.toast {
+  position: fixed;
+  /* 左右都定住再用 margin 居中，不要 left:50% + translateX(-50%)：
+     那种写法下收缩包裹的可用宽度只从中线算到右边缘，等于只剩半屏，
+     长一点的店名会被挤成又窄又高的一坨。 */
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(2rem + env(safe-area-inset-bottom));
+  width: fit-content;
+  margin-inline: auto;
+  padding: 0.75rem 1.25rem;
+  border-radius: 999px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 0.9rem;
+  text-align: center;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.2);
+  z-index: 100;
+  pointer-events: none;  /* 纯提示，不该挡住底下的按钮 */
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.toast-show { opacity: 1; }
+/* position: fixed 不改 display，[hidden] 本来就生效；写出来是为了跟
+   .overlay / .form / .io-row 保持一致，免得以后有人给它加 display 踩坑。 */
+.toast[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { transition: none; }
+}
+
 .io-row { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; }
 .io-row[hidden] { display: none; }  /* 同上：display: flex 会盖掉 [hidden] */
 .io-row > * { flex: 1; margin-top: 0; }
