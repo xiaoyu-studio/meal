@@ -33,30 +33,12 @@ function openDB() {
   return dbPromise;
 }
 
-// ⚠️ 临时验收补丁 —— 真机验收第 11 条专用，验完必须 revert。
-// 只在导出时置位，别的读写不受影响（否则每次开页面都要等十秒）。
-let SLOW_FOR_ACCEPTANCE = false;
-
 function run(store, mode, fn) {
   return openDB().then(
     (db) =>
       new Promise((resolve, reject) => {
         const tx = db.transaction(store, mode);
-        const os = tx.objectStore(store);
-        const req = fn(os);
-
-        // ⚠️ 临时验收补丁：把事务撑开约十秒，好让人有时间切到别的 App，
-        // 逼 WebKit 在页面挂起时中断它。
-        // 注意不能用 setTimeout —— IndexedDB 事务在没有待处理请求时会立刻
-        // 自动提交，只有不断发新请求才能让它保持打开。
-        if (SLOW_FOR_ACCEPTANCE) {
-          const deadline = Date.now() + 10000;
-          const keepAlive = () => {
-            if (Date.now() > deadline) return;
-            os.count().onsuccess = keepAlive;
-          };
-          keepAlive();
-        }
+        const req = fn(tx.objectStore(store));
         tx.onerror = () => reject(tx.error);
         // abort 不一定伴随请求错误：WebKit 会在页面被挂起（切到别的 App）时
         // 直接中断进行中的事务。不接这个事件，Promise 就永远悬着 ——
@@ -119,13 +101,7 @@ export async function appendEvent({ slot, dishId, type, value = null, targetTs =
 }
 
 export async function exportSnapshot() {
-  // ⚠️ 临时验收补丁 —— 验完必须 revert。
-  SLOW_FOR_ACCEPTANCE = true;
-  try {
-    return toSnapshot(await loadAll(), Date.now());
-  } finally {
-    SLOW_FOR_ACCEPTANCE = false;
-  }
+  return toSnapshot(await loadAll(), Date.now());
 }
 
 /** 整库替换。先校验再清空，校验失败时旧数据分毫不动。 */
