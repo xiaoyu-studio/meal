@@ -1134,13 +1134,20 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: 给原 spec 受影响的各节加注记**
 
-在 `docs/superpowers/specs/2026-08-22-meal-recommender-design.md` 的 §3.6、§5.3、§6.2、§6.3、§6.5、§6.6、§6.7、§7.1 每节标题的下一行，各插入一行：
+在 `docs/superpowers/specs/2026-08-22-meal-recommender-design.md` 的 §3.6、§5.3、§6.2、§6.3、§6.5、§6.6、§6.7、§7.1、§9.1 每节标题的下一行，各插入一行：
 
 ```markdown
 > **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 ```
 
 原文一律不删。
+
+§9.1 另需在那条列表项下补一句，因为它点名的测试用例本身已经作废：
+
+```markdown
+> 其中「连续换两次后仍能给出第三个不同的推荐」随 2026-08-26 修订作废 ——
+> 换的次数已无上限，取而代之的是 `rankCandidates` 返回完整排序候选的测试。
+```
 
 - [ ] **Step 2: 往 README 验收清单加四条**
 
@@ -1174,7 +1181,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## 自查记录
 
-**Spec 覆盖：** §3.1/§3.2 → Task 4 + Task 6；§3.3 → Task 3 + Task 6 Step 8；§3.4 → Task 1；§3.5 → Task 1（保留 `IMPLICIT_CLICKED` 不动）；§3.6 → Task 1；§3.7 → Task 2 + Task 5 + Task 6 Step 9；§3.8 → 不实现，无对应任务（有意）；§4.1/§4.2/§4.3 → Task 6；§5 → Task 5（`recommended.value`）+ Task 6（`muted` 写入）；§6.1 → Task 2；§6.2 → Task 1；§7.1 → Task 1；§7.2 → Task 3；§7.3 → Task 3 Step 7；§7.4 → Task 1 Step 7 + Task 3 Step 3 + Task 5 Step 5；§9 → 各任务的测试步骤 + Task 7 Step 2；§10 → Task 7 Step 1。
+**Spec 覆盖：** §3.1/§3.2 → Task 4 + Task 6；§3.3 → Task 3 + Task 6 Step 8；§3.4 → Task 1；§3.5 → Task 1（保留 `IMPLICIT_CLICKED` 不动）；§3.6 → Task 1；§3.7 → Task 2 + Task 5 + Task 6 Step 9；§3.8 → 不实现，无对应任务（有意）；§4.1/§4.2/§4.3 → Task 6；§5 → Task 5（`recommended.value`）+ Task 6（`muted` 写入）；§6.1 → Task 2；§6.2 → Task 1；§7.1 → Task 1；§7.2 → Task 3；§7.3 → Task 3 Step 7；§7.4 → Task 1 Step 7 + Task 3 Step 3 + Task 5 Step 5；§9 → 各任务的测试步骤 + Task 7 Step 2；§10 → Task 7 Step 1（含原 spec §9.1 —— 它点名的「连续换两次后仍能给出第三个不同的推荐」随本次修订作废，须一并注记）。
+
+**未覆盖、且不属于本次范围的既有遗留：** 原 spec §9.1 要求「`store` 必须测导出 → 导入的往返一致性」，而 §3.4 禁止引入 `fake-indexeddb`，两条互相矛盾，至今未在文档里注明取舍。这不是本次改动引入的，也不该由本计划顺手处理 —— 单独记在遗留清单里。
 
 **已知未覆盖：** spec §9 列的「滑动与纵向滚动不冲突」「静音后的实际观感」等真机项，按设计本就无法自动化，已写进 README 第 16–19 条。
 
