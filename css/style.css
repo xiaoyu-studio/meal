@@ -217,7 +217,8 @@ body {
   z-index: 100;
   pointer-events: none;  /* 纯提示，不该挡住底下的按钮 */
   opacity: 0;
-  transition: opacity 0.2s ease;
+  /* 0.2s 在手机上几乎察觉不到，淡出尤其显得像是直接消失。 */
+  transition: opacity 0.3s ease;
 }
 .toast-show { opacity: 1; }
 /* position: fixed 不改 display，[hidden] 本来就生效；写出来是为了跟

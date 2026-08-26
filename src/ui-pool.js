@@ -76,12 +76,27 @@ function showToast(text) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     t.classList.remove('toast-show');
-    // 淡出结束再收起来。这期间若又弹了新的 toast，toast-show 会被重新加上，
-    // 那就不能再 hidden —— 所以收起前必须确认它确实还处在淡出状态。
-    setTimeout(() => {
+
+    // 收起必须等淡出真的跑完，所以听 transitionend 而不是掐一个定时器 ——
+    // 定时器时长一旦等于（甚至只是接近）过渡时长，display:none 就会抢在
+    // 过渡结束前生效，看起来是「一闪就没」而不是淡出。
+    //
+    // 但 transitionend 不是一定会来：用户开了「减弱动态效果」时
+    // transition 是 none，压根不派发这个事件。所以另配一个兜底定时器，
+    // 谁先到谁收尾，用 done 里的判断保证只执行一次。
+    let settled = false;
+    const done = (e) => {
+      if (e && e.propertyName !== 'opacity') return;
+      if (settled) return;
+      settled = true;
+      t.removeEventListener('transitionend', done);
+      clearTimeout(fallback);
+      // 期间又弹了新的 toast，就不能收起来。
       if (!t.classList.contains('toast-show')) t.hidden = true;
-    }, 200);
-  }, 2400);
+    };
+    const fallback = setTimeout(done, 600);
+    t.addEventListener('transitionend', done);
+  }, 2600);
 }
 
 /** 本地存储读不出来时兜底展示的失败态。 */
