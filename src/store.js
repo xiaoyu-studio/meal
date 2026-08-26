@@ -13,6 +13,15 @@ let dbPromise = null;
  * 页面停在空白卡片上。届时至少要 reject 一个中文错误提示用户关掉其他标签页。
  */
 function openDB() {
+  // ⚠️⚠️⚠️ 临时验收补丁 —— 真机验收清单第 14 条（存储失败回退界面）专用。
+  // 验收完成后必须 `git revert` 掉这一条 commit。留在线上等于整个 app 不可用。
+  // 每次调用都返回一个全新的 rejected promise，不写 dbPromise —— 这样「重试」
+  // 按钮会重新走一遍加载并再次失败，正好验证它确实重新发起了请求。
+  // （不能在 Promise 构造器里 reject 并顺手把 dbPromise 置 null：执行器是
+  // 同步跑的，跑完之后外层那次赋值才落地，会把 null 又覆盖回去。）
+  return Promise.reject(new Error('本地存储不可用（验收用的人为故障）'));
+
+  // eslint-disable-next-line no-unreachable
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
