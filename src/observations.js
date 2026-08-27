@@ -88,9 +88,19 @@ export function reduceObservations(events) {
     }
   }
 
+  // 一顿只认最后一条推荐。
+  // 用户可以在轮播里左右浏览，系统最初推的是 A、他最终在 B 上下单，
+  // 这一顿的观察值就该是 B。被丢弃的组连同挂在它上面的反应事件一起作废。
+  const latestPerMeal = new Map(); // key = dateKey|slot -> group
+  for (const group of groups.values()) {
+    const mealKey = `${group.dateKey}|${group.slot}`;
+    const kept = latestPerMeal.get(mealKey);
+    if (!kept || group.ts > kept.ts) latestPerMeal.set(mealKey, group);
+  }
+
   // 减缩每个组
   const out = [];
-  for (const group of groups.values()) {
+  for (const group of latestPerMeal.values()) {
     const ratedEvents = group.events.filter((e) => e.type === 'rated');
     const rated = ratedEvents.length > 0
       ? ratedEvents.reduce((latest, e) => (e.ts > latest.ts ? e : latest))

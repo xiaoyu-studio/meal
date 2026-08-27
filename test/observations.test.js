@@ -73,18 +73,44 @@ test('没有 recommended 的事件组被忽略', () => {
   assert.equal(obs.length, 0);
 });
 
-test('同一顿换两次产生三条独立观察值', () => {
+test('同一顿有多条 recommended 时只留最后一条', () => {
   const obs = reduceObservations([
     ev('recommended', 'a', at(0, 12)),
-    ev('swapped', 'a', at(0, 12) + 1000),
     ev('recommended', 'b', at(0, 12) + 2000),
-    ev('swapped', 'b', at(0, 12) + 3000),
     ev('recommended', 'c', at(0, 12) + 4000),
     ev('clicked', 'c', at(0, 12) + 5000),
   ]);
-  assert.equal(obs.length, 3);
-  assert.deepEqual(obs.map((o) => o.dishId), ['a', 'b', 'c']);
-  assert.deepEqual(obs.map((o) => o.value), [null, null, 0.65]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dishId, 'c');
+  assert.equal(obs[0].value, 0.65);
+});
+
+test('被丢弃那条上的反应事件一并丢弃', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'a', at(0, 12)),
+    ev('clicked', 'a', at(0, 12) + 1000),
+    ev('recommended', 'b', at(0, 12) + 2000),
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dishId, 'b');
+  assert.equal(obs[0].value, null);
+});
+
+test('不同饭点、不同日期各自保留自己最后那条', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'a', at(0, 12), 'lunch'),
+    ev('recommended', 'b', at(0, 12) + 1000, 'lunch'),
+    ev('recommended', 'c', at(0, 19), 'dinner'),
+    ev('recommended', 'd', at(1, 12), 'lunch'),
+  ]);
+  assert.deepEqual(
+    obs.map((o) => [o.dateKey, o.slot, o.dishId]).sort(),
+    [
+      ['2026-08-22', 'dinner', 'c'],
+      ['2026-08-22', 'lunch', 'b'],
+      ['2026-08-23', 'lunch', 'd'],
+    ].sort(),
+  );
 });
 
 test('同一天不同饭点的同一道菜是两条观察值', () => {
