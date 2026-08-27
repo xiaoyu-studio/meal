@@ -95,22 +95,21 @@ export function reduceObservations(events) {
     const rated = ratedEvents.length > 0
       ? ratedEvents.reduce((latest, e) => (e.ts > latest.ts ? e : latest))
       : null;
-    const swapped = group.events.find((e) => e.type === 'swapped');
     const clicked = group.events.find((e) => e.type === 'clicked');
 
     let value;
     let source;
     if (rated) {
-      value = CONFIG.RATING_VALUES[rated.value] ?? CONFIG.IMPLICIT_NO_ACTION;
+      // 认不出的评分值仍算「已评分」——否则会被反复补问——但不参与计算。
+      value = CONFIG.RATING_VALUES[rated.value] ?? null;
       source = 'rated';
-    } else if (swapped) {
-      value = CONFIG.IMPLICIT_SWAPPED;
-      source = 'swapped';
     } else if (clicked) {
       value = CONFIG.IMPLICIT_CLICKED;
       source = 'clicked';
     } else {
-      value = CONFIG.IMPLICIT_NO_ACTION;
+      // 推了但没动作：记录照留（补问要靠它），但不折算成分数 ——
+      // 切出应用可能只是去回条消息，与这道菜好不好吃无关。
+      value = null;
       source = 'none';
     }
 
@@ -159,8 +158,6 @@ export function buildEatenIndex(observations, dishesById) {
 /**
  * 下次打开时该补问哪一顿。每次最多返回一条 —— 积压再多也只问最近那顿，
  * 避免一次弹出一串问题。
- *
- * 被「换一个」换掉的观察值不补问：用户按了换，说明他没吃这道菜。
  */
 export function pendingFeedback(observations, nowTs, slot) {
   if (observations.length === 0) return null;
@@ -170,7 +167,6 @@ export function pendingFeedback(observations, nowTs, slot) {
 
   if (latest.dateKey === nowKey && latest.slot === slot) return null;
   if (latest.source === 'rated') return null;
-  if (latest.source === 'swapped') return null;
   return latest;
 }
 

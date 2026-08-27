@@ -28,16 +28,18 @@ export function filterCandidates({ dishes, shops, slot, excludedDishIds = [] }) 
  * 零观察值时返回乐观初值 0.7，让新录入的菜有机会被推出来试。
  */
 export function tasteOf(observations, nowTs) {
-  if (observations.length === 0) return CONFIG.COLD_START_TASTE;
-
   let numerator = 0;
   let denominator = 0;
   for (const obs of observations) {
+    if (obs.value === null || obs.value === undefined) continue;
     const daysAgo = (nowTs - obs.ts) / DAY_MS;
     const weight = Math.pow(0.5, daysAgo / CONFIG.TASTE_HALFLIFE_DAYS);
     numerator += weight * obs.value;
     denominator += weight;
   }
+  // 一条带数值的观察值都没有时（含空数组），退回乐观初值，
+  // 让新录入的菜有机会被推出来试。
+  if (denominator === 0) return CONFIG.COLD_START_TASTE;
   return numerator / denominator;
 }
 

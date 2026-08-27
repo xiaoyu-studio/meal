@@ -9,10 +9,10 @@ const ev = (type, dishId, ts, slot = 'lunch', value = null) => ({
   id: `${type}-${dishId}-${ts}`, ts, slot, dishId, type, value,
 });
 
-test('只有 recommended，无任何后续动作 → 0.45', () => {
+test('只有 recommended，无任何后续动作 → 不带数值', () => {
   const obs = reduceObservations([ev('recommended', 'd1', at(0, 12))]);
   assert.equal(obs.length, 1);
-  assert.equal(obs[0].value, 0.45);
+  assert.equal(obs[0].value, null);
   assert.equal(obs[0].source, 'none');
   assert.equal(obs[0].eaten, false);
 });
@@ -26,13 +26,14 @@ test('clicked 未被 rated 覆盖 → 0.65', () => {
   assert.equal(obs[0].source, 'clicked');
 });
 
-test('swapped → 0.2', () => {
+test('旧的 swapped 事件被忽略，该组等同于无动作', () => {
   const obs = reduceObservations([
     ev('recommended', 'd1', at(0, 12)),
     ev('swapped', 'd1', at(0, 12) + 5000),
   ]);
-  assert.equal(obs[0].value, 0.2);
-  assert.equal(obs[0].source, 'swapped');
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].value, null);
+  assert.equal(obs[0].source, 'none');
 });
 
 test('rated 优先级高于 clicked', () => {
@@ -83,7 +84,7 @@ test('同一顿换两次产生三条独立观察值', () => {
   ]);
   assert.equal(obs.length, 3);
   assert.deepEqual(obs.map((o) => o.dishId), ['a', 'b', 'c']);
-  assert.deepEqual(obs.map((o) => o.value), [0.2, 0.2, 0.65]);
+  assert.deepEqual(obs.map((o) => o.value), [null, null, 0.65]);
 });
 
 test('同一天不同饭点的同一道菜是两条观察值', () => {
@@ -185,7 +186,7 @@ test('连续两天推同一道菜，第二天补评第一天：评分不被今�
     obs.map((o) => [o.dateKey, o.source, o.value, o.eaten]),
     [
       ['2026-08-22', 'rated', 1.0, true],
-      ['2026-08-23', 'none', 0.45, false],
+      ['2026-08-23', 'none', null, false],
     ],
   );
 
@@ -202,7 +203,7 @@ const dishesById = new Map([
 
 const obs = (dishId, dateKey, eaten) => ({
   dishId, dateKey, slot: 'lunch', ts: new Date(`${dateKey}T12:00:00`).getTime(),
-  value: eaten ? 1 : 0.2, source: eaten ? 'rated' : 'swapped',
+  value: eaten ? 1 : null, source: eaten ? 'rated' : 'none',
   ratedValue: eaten ? 'good' : null, eaten,
 });
 
@@ -283,12 +284,6 @@ test('pendingFeedback 跳过已评分的', () => {
   assert.equal(r, null);
 });
 
-test('pendingFeedback 跳过被换掉的（用户没吃它）', () => {
-  const r = pendingFeedback(
-    [obsAt('d1', -1, 19, 'dinner', 'swapped')], NOW, 'lunch');
-  assert.equal(r, null);
-});
-
 test('pendingFeedback 补问推了但毫无动作的那顿', () => {
   const r = pendingFeedback(
     [obsAt('d1', -1, 19, 'dinner', 'none')], NOW, 'lunch');
@@ -305,7 +300,7 @@ test('pendingFeedback 只看最近一条，不翻旧账', () => {
 
 test('pendingFeedback 在同一顿换过再点的情况下问最后点的那个', () => {
   const r = pendingFeedback([
-    obsAt('a', -1, 19, 'dinner', 'swapped'),
+    obsAt('a', -1, 19, 'dinner', 'none'),
     { ...obsAt('b', -1, 19, 'dinner', 'clicked'), ts: new Date(2026, 7, 21, 19, 5).getTime() },
   ], NOW, 'lunch');
   assert.equal(r.dishId, 'b');

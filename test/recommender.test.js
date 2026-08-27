@@ -422,3 +422,12 @@ test('返回的 reason 恒为非空字符串', () => {
   assert.equal(typeof r.reason, 'string');
   assert.ok(r.reason.length > 0);
 });
+
+test('tasteOf 跳过不带数值的观察值', () => {
+  const withNulls = tasteOf([o(1.0, 1), { ...o(0, 1), value: null }], NOW);
+  assert.equal(withNulls, tasteOf([o(1.0, 1)], NOW));
+});
+
+test('tasteOf 在观察值全部不带数值时退回冷启动值', () => {
+  assert.equal(tasteOf([{ ...o(0, 1), value: null }], NOW), CONFIG.COLD_START_TASTE);
+});
