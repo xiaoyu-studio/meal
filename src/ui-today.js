@@ -1,7 +1,7 @@
 import { SLOT_LABELS, SLOTS } from './config.js';
 import { slotFromTime, localDateKey } from './dates.js';
 import { currentPick, pendingFeedback, reduceObservations } from './observations.js';
-import { recommend } from './recommender.js';
+import { rankCandidates } from './recommender.js';
 import { loadAll, appendEvent, setHygiene } from './store.js';
 import { openShopLink, copyText } from './deeplink.js';
 
@@ -22,7 +22,9 @@ function showFailure(err) {
   el('failure').hidden = false;
 }
 
-let state = { slot: null, dish: null, shop: null };
+// ranked 是这一顿的完整候选列表，页面加载时算定，浏览期间不重算 ——
+// 否则划着划着顺序会变。index 是当前停在第几道。
+let state = { slot: null, dish: null, shop: null, ranked: [], index: 0 };
 
 const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '没吃成' };
 
@@ -131,6 +133,30 @@ async function renderFeedback() {
   }
 }
 
+/** 把轮播的第 i 项画到卡片上。不写任何事件 —— 浏览是免费的。 */
+function showAt(index) {
+  const row = state.ranked[index];
+  const shop = state.shops.find((s) => s.id === row.dish.shopId);
+  state = { ...state, index, dish: row.dish, shop };
+
+  el('slot-label').textContent = SLOT_LABELS[state.slot];
+  el('dish-name').textContent = row.dish.name;
+  el('shop-name').textContent = shop.name;
+  el('price').textContent = `约 ¥${row.dish.refPrice}`;
+  el('reason').textContent = row.reason;
+  el('carousel-pos').textContent = `${index + 1} / ${state.ranked.length}`;
+  el('failure').hidden = true;
+  el('empty').hidden = true;
+  el('card').hidden = false;
+}
+
+/** 前后翻一道，首尾相接。取模两次是为了让负数也落回正区间。 */
+function step(delta) {
+  if (state.ranked.length === 0) return;
+  const n = state.ranked.length;
+  showAt((((state.index + delta) % n) + n) % n);
+}
+
 async function render() {
   try {
     const now = Date.now();
@@ -139,56 +165,64 @@ async function render() {
     const nowKey = localDateKey(now);
 
     const pick = currentPick(events, slot, nowKey);
-    let dish = null;
-    let reason = '';
 
-    // 这一顿已经定下的，重载时不重新掷骰子。
-    if (pick.activeDishId) {
-      dish = dishes.find((d) => d.id === pick.activeDishId) ?? null;
-      if (dish) reason = pick.activeReason ?? '换换口味';
-    }
+    // 正在补问的那道菜不排在初始位置：不能一边问「上顿的黄焖鸡怎么样」
+    // 一边又端上同一道黄焖鸡。但它仍留在轮播里，用户划得到。
+    const asking = pendingFeedback(reduceObservations(events), now, slot);
+    const ranked = rankCandidates({ dishes, shops, events, slot, now });
 
-    if (!dish) {
-      // 正在补问的那道菜这一顿不再推：不能一边问「上顿的黄焖鸡怎么样」
-      // 一边又端上同一道黄焖鸡。
-      const asking = pendingFeedback(reduceObservations(events), now, slot);
-      const excludedDishIds = asking ? [asking.dishId] : [];
-
-      // 但候选池小到只剩它时，宁可重复推荐也不能显示「没有可推的」。
-      const result =
-        recommend({ dishes, shops, events, slot, now, excludedDishIds }) ??
-        (asking ? recommend({ dishes, shops, events, slot, now }) : null);
-      if (result) {
-        dish = result.dish;
-        reason = result.reason;
-        await appendEvent({ slot, dishId: dish.id, type: 'recommended', value: reason });
-      }
-    }
-
-    if (!dish) {
+    if (ranked.length === 0) {
       el('failure').hidden = true;
       el('card').hidden = true;
       el('empty').hidden = false;
       return;
     }
 
-    const shop = shops.find((s) => s.id === dish.shopId);
-    state = { slot, dish, shop };
+    let index = 0;
+    if (pick.activeDishId) {
+      // 这一顿已经定过，回到那道菜上 —— 刷新与下单往返都不该改变所见。
+      const found = ranked.findIndex((r) => r.dish.id === pick.activeDishId);
+      if (found >= 0) index = found;
+    } else {
+      if (asking && ranked.length > 1 && ranked[0].dish.id === asking.dishId) {
+        index = 1;
+      }
+      await appendEvent({
+        slot, dishId: ranked[index].dish.id,
+        type: 'recommended', value: ranked[index].reason,
+      });
+    }
 
-    el('slot-label').textContent = SLOT_LABELS[slot];
-    el('dish-name').textContent = dish.name;
-    el('shop-name').textContent = shop.name;
-    el('price').textContent = `约 ¥${dish.refPrice}`;
-    el('reason').textContent = reason;
-    el('failure').hidden = true;
-    el('empty').hidden = true;
-    el('card').hidden = false;
+    // shops 存进 state：翻页时 showAt 还要用它查店名，而 step() 是从
+    // 按钮和手势里调的，拿不到 render() 的局部变量。
+    // recordedDishId 记的是这一顿已经写进事件流的那道菜 ——「去下单」
+    // 靠它判断要不要补写，省掉一次多余的 loadAll()。
+    state = {
+      slot, dish: null, shop: null, ranked, index, shops,
+      recordedDishId: pick.activeDishId ?? ranked[index].dish.id,
+    };
+    showAt(index);
   } catch (err) {
     showFailure(err);
   }
 }
 
 el('order').addEventListener('click', async () => {
+  // 用户可能浏览到了别的菜上。这一顿的观察值应当落在他真正下单的那道，
+  // 所以先补一条 recommended —— 归约那边只认最后一条。
+  // 用 state.recordedDishId 判断，不必再读一次库。
+  if (state.recordedDishId !== state.dish.id) {
+    try {
+      await appendEvent({
+        slot: state.slot, dishId: state.dish.id,
+        type: 'recommended', value: state.ranked[state.index].reason,
+      });
+      state = { ...state, recordedDishId: state.dish.id };
+    } catch (err) {
+      // 补写失败就不改 recordedDishId，下次点还会再试一遍。
+      console.error('补写 recommended 事件失败', err);
+    }
+  }
   try {
     await appendEvent({
       slot: state.slot, dishId: state.dish.id, type: 'clicked',
@@ -200,18 +234,46 @@ el('order').addEventListener('click', async () => {
   openShopLink(state.shop.link);
 });
 
-el('swap').addEventListener('click', async () => {
+el('swap').addEventListener('click', () => {
+  step(1);
+});
+
+// 左右滑动翻菜。阈值 50px，且横向位移必须明显大于纵向 ——
+// 否则用户想纵向滚页面时会被误判成翻菜。
+const SWIPE_MIN_X = 50;
+let touchStartX = null;
+let touchStartY = null;
+
+el('card').addEventListener('touchstart', (e) => {
+  const t = e.changedTouches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+}, { passive: true });
+
+el('card').addEventListener('touchend', (e) => {
+  if (touchStartX === null) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  touchStartX = null;
+  touchStartY = null;
+  if (Math.abs(dx) < SWIPE_MIN_X) return;
+  if (Math.abs(dx) <= Math.abs(dy)) return;
+  step(dx < 0 ? 1 : -1);   // 左滑看下一道，右滑退回上一道
+}, { passive: true });
+
+el('mute').addEventListener('click', async () => {
+  const dish = state.dish;
+  if (!dish) return;
   try {
-    await appendEvent({
-      slot: state.slot, dishId: state.dish.id, type: 'swapped',
-    });
-    await render();
+    await appendEvent({ slot: state.slot, dishId: dish.id, type: 'muted' });
   } catch (err) {
-    console.error('记录「换一个」事件失败', err);
-    const original = el('reason').textContent;
-    el('reason').textContent = '换一个失败，请稍后再试';
-    setTimeout(() => { el('reason').textContent = original; }, 2000);
+    // 记录失败不该拦住用户往下翻 —— 日志是记账，不是门槛。
+    console.error('记录「别再推这个」事件失败', err);
   }
+  // 排序已在加载时算定，这道菜本轮仍留在轮播里；静音下次加载才生效。
+  // 但至少先把它翻过去，别让用户盯着一道刚被自己静音的菜。
+  step(1);
 });
 
 el('copy-shop').addEventListener('click', async () => {

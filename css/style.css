@@ -270,3 +270,11 @@ body {
 }
 
 .dish-stat { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+
+/* 轮播位置指示。不做圆点是因为候选可能有几十道，圆点会排到屏幕外。 */
+.carousel-pos {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+  margin: 0.5rem 0 0;
+}
