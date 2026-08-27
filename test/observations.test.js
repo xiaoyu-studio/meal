@@ -374,6 +374,13 @@ test('currentPick 对没存理由的旧事件返回 null 理由', () => {
   assert.equal(p.activeReason, null);
 });
 
+test('currentPick 对 value 是数字的异常事件也返回 null 理由', () => {
+  // 守卫的现实来源是导入的旧快照 —— fromSnapshot 只校验 id，value 可能是任意东西。
+  const p = currentPick([{ ...evt('recommended', 'a', 12), value: 42 }], 'lunch', '2026-08-22');
+  assert.equal(p.activeDishId, 'a');
+  assert.equal(p.activeReason, null);
+});
+
 test('currentPick 忽略其他饭点和其他日期的事件', () => {
   const p = currentPick([
     evt('recommended', 'x', 12, 0, 'dinner'),

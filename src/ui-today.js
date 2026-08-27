@@ -24,12 +24,12 @@ function showFailure(err) {
 
 // ranked 是这一顿的完整候选列表，页面加载时算定，浏览期间不重算 ——
 // 否则划着划着顺序会变。index 是当前停在第几道。
-let state = { slot: null, dish: null, shop: null, ranked: [], index: 0 };
+let state = { slot: null, dish: null, shop: null, ranked: [], index: 0, shops: [], recordedDishId: null };
 
 const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '没吃成' };
 
 /**
- * 渲染补问上一顿的浮层。已评过、被换掉、或就是当前这顿的，都不问——
+ * 渲染补问上一顿的浮层。已评过、或就是当前这顿的，都不问——
  * 这些跳过规则全在 pendingFeedback 里，这里只负责渲染它返回的结果。
  *
  * 本地存储读取失败时不该拦住主卡片渲染：吞掉错误、跳过浮层即可。
@@ -219,6 +219,7 @@ async function render() {
 }
 
 el('order').addEventListener('click', async () => {
+  if (!state.dish) return;
   // 用户可能浏览到了别的菜上。这一顿的观察值应当落在他真正下单的那道，
   // 所以先补一条 recommended —— 归约那边只认最后一条。
   // 用 state.recordedDishId 判断，不必再读一次库。
@@ -279,8 +280,13 @@ el('mute').addEventListener('click', async () => {
   try {
     await appendEvent({ slot: state.slot, dishId: dish.id, type: 'muted' });
   } catch (err) {
-    // 记录失败不该拦住用户往下翻 —— 日志是记账，不是门槛。
+    // 这个按钮的全部意义就是让它持久生效，所以写失败必须让用户看见 ——
+    // 手机上没有控制台可看。也不要翻页：卡片一动，用户就会以为记下了。
     console.error('记录「别再推这个」事件失败', err);
+    const original = el('reason').textContent;
+    el('reason').textContent = '没记上，请稍后再试';
+    setTimeout(() => { el('reason').textContent = original; }, 2000);
+    return;
   }
   // 排序已在加载时算定，这道菜本轮仍留在轮播里；静音下次加载才生效。
   // 但至少先把它翻过去，别让用户盯着一道刚被自己静音的菜。

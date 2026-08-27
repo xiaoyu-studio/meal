@@ -208,7 +208,10 @@ export function rankCandidates({
         dish: r.dish,
         score: r.score,
         reason: reasonFor({
-          hasObservations: r.obs.length > 0,
+          // 判据必须跟 tasteOf 一致 —— 数的是「带数值的观察值」而不是「观察值」。
+          // 推了但用户没动作会留下一条不带数值的记录，它不该让「还没试过」
+          // 变成「评价一直不错」。
+          hasObservations: r.obs.some((o) => o.value !== null && o.value !== undefined),
           lastRatedValue,
           isTopTaste: r.taste === maxTaste,
           isTopValue: r.value === maxValue,

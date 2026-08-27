@@ -498,3 +498,18 @@ test('recommend 返回的就是 rankCandidates 的第一条', () => {
   assert.equal(one.dish.id, ranked[0].dish.id);
   assert.equal(one.reason, ranked[0].reason);
 });
+
+test('推过但毫无动作的菜不会被说成「评价一直不错」', () => {
+  const dishes = [
+    { id: 'a', shopId: 's1', name: 'A', refPrice: 20, slots: ['lunch'], tags: [] },
+    { id: 'b', shopId: 's1', name: 'B', refPrice: 20, slots: ['lunch'], tags: [] },
+  ];
+  const shops = [{ id: 's1', name: 'S', hygiene: 'unknown' }];
+  // 昨天推过 A，用户什么都没做 —— 留下一条不带数值的观察值。
+  const events = [
+    { id: 'r1', ts: NOW - 86400000, slot: 'lunch', dishId: 'a', type: 'recommended', value: null },
+  ];
+  const ranked = rankCandidates({ dishes, shops, events, slot: 'lunch', now: NOW, random: () => 0.5 });
+  const rowA = ranked.find((r) => r.dish.id === 'a');
+  assert.equal(rowA.reason, '还没试过，试试看');
+});
