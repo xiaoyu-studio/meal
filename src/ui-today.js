@@ -166,8 +166,6 @@ async function render() {
 
     const pick = currentPick(events, slot, nowKey);
 
-    // 正在补问的那道菜不排在初始位置：不能一边问「上顿的黄焖鸡怎么样」
-    // 一边又端上同一道黄焖鸡。但它仍留在轮播里，用户划得到。
     const asking = pendingFeedback(reduceObservations(events), now, slot);
     const ranked = rankCandidates({ dishes, shops, events, slot, now });
 
@@ -178,12 +176,25 @@ async function render() {
       return;
     }
 
+    // 这一顿定过没有？定过就回到那道菜上 —— 刷新与下单往返都不该改变所见。
+    // findIndex 返回 -1 有两种可能：没定过，或者定下的那道菜已经被从候选池里
+    // 删掉了。后者按「没定过」处理并重新写一条 —— 否则事件日志里会一直挂着
+    // 一条指向已删除菜的推荐记录，而屏幕上显示的却是另一道。
+    const decided = pick.activeDishId
+      ? ranked.findIndex((r) => r.dish.id === pick.activeDishId)
+      : -1;
+
     let index = 0;
-    if (pick.activeDishId) {
-      // 这一顿已经定过，回到那道菜上 —— 刷新与下单往返都不该改变所见。
-      const found = ranked.findIndex((r) => r.dish.id === pick.activeDishId);
-      if (found >= 0) index = found;
+    if (decided >= 0) {
+      index = decided;
+      // 显示当初记下的那条理由，而不是此刻重算的那句。这一顿已经有了
+      // recommended 事件，重算时「有没有历史观察值」的判据就变了，
+      // 理由会换成另一句 —— 用户会以为页面自己改了主意。
+      // 旧事件没存理由（activeReason 为 null）时才退回重算的那句。
+      if (pick.activeReason) ranked[index].reason = pick.activeReason;
     } else {
+      // 正在补问的那道菜不排在初始位置：不能一边问「上顿的黄焖鸡怎么样」
+      // 一边又端上同一道黄焖鸡。但它仍留在轮播里，用户划得到。
       if (asking && ranked.length > 1 && ranked[0].dish.id === asking.dishId) {
         index = 1;
       }
@@ -199,7 +210,7 @@ async function render() {
     // 靠它判断要不要补写，省掉一次多余的 loadAll()。
     state = {
       slot, dish: null, shop: null, ranked, index, shops,
-      recordedDishId: pick.activeDishId ?? ranked[index].dish.id,
+      recordedDishId: ranked[index].dish.id,
     };
     showAt(index);
   } catch (err) {
