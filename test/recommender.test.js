@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterCandidates, tasteOf, effectivePriceOf, valueOf, fatigueOf, reasonFor, recommend } from '../src/recommender.js';
+import { filterCandidates, tasteOf, effectivePriceOf, valueOf, fatigueOf, muteOf, reasonFor, recommend } from '../src/recommender.js';
 import { CONFIG } from '../src/config.js';
 
 const DAY = 86400000;
@@ -430,4 +430,35 @@ test('tasteOf 跳过不带数值的观察值', () => {
 
 test('tasteOf 在观察值全部不带数值时退回冷启动值', () => {
   assert.equal(tasteOf([{ ...o(0, 1), value: null }], NOW), CONFIG.COLD_START_TASTE);
+});
+
+test('muteOf 无 muted 记录时不打折', () => {
+  assert.equal(muteOf({ lastMutedKey: undefined, nowKey: '2026-08-26' }), 1);
+});
+
+test('muteOf 当天压到地板值', () => {
+  assert.equal(
+    muteOf({ lastMutedKey: '2026-08-26', nowKey: '2026-08-26' }),
+    CONFIG.MUTE_FLOOR,
+  );
+});
+
+test('muteOf 随天数单调回升且始终小于 1', () => {
+  const at7 = muteOf({ lastMutedKey: '2026-08-19', nowKey: '2026-08-26' });
+  const at30 = muteOf({ lastMutedKey: '2026-07-27', nowKey: '2026-08-26' });
+  assert.ok(at7 > CONFIG.MUTE_FLOOR, `期望 >${CONFIG.MUTE_FLOOR}，实际 ${at7}`);
+  assert.ok(at30 > at7, `期望 ${at30} > ${at7}`);
+  assert.ok(at30 < 1, `期望 <1，实际 ${at30}`);
+});
+
+test('被静音的菜在评分中被压低', () => {
+  const dishes = [
+    { id: 'a', shopId: 's1', name: 'A', refPrice: 20, slots: ['lunch'], tags: [] },
+    { id: 'b', shopId: 's1', name: 'B', refPrice: 20, slots: ['lunch'], tags: [] },
+  ];
+  const shops = [{ id: 's1', name: 'S', hygiene: 'unknown' }];
+  const events = [{ id: 'm1', ts: NOW, slot: 'lunch', dishId: 'a', type: 'muted', value: null }];
+  // 固定 random 消除抖动，两道菜其余条件完全相同。
+  const r = recommend({ dishes, shops, events, slot: 'lunch', now: NOW, random: () => 0.5 });
+  assert.equal(r.dish.id, 'b');
 });

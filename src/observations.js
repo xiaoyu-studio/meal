@@ -179,6 +179,22 @@ export function buildEatenIndex(observations, dishesById) {
 }
 
 /**
+ * 每道菜最近一次被按下「别再推这个」的本地日期键。
+ * 直接从原始事件流取，不经过观察值 —— 静音是对菜的表态，
+ * 不属于任何一顿饭。
+ */
+export function buildMutedIndex(events) {
+  const out = new Map();
+  for (const e of events) {
+    if (e.type !== 'muted') continue;
+    const key = localDateKey(e.ts);
+    const prev = out.get(e.dishId);
+    if (prev === undefined || key > prev) out.set(e.dishId, key);
+  }
+  return out;
+}
+
+/**
  * 下次打开时该补问哪一顿。每次最多返回一条 —— 积压再多也只问最近那顿，
  * 避免一次弹出一串问题。
  */

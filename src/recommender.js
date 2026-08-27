@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 import { daysBetweenKeys, localDateKey } from './dates.js';
-import { reduceObservations, buildEatenIndex } from './observations.js';
+import { reduceObservations, buildEatenIndex, buildMutedIndex } from './observations.js';
 
 const DAY_MS = 86400000;
 
@@ -99,6 +99,23 @@ export function fatigueOf({
 }
 
 /**
+ * 静音系数 ∈ [MUTE_FLOOR, 1)：按过「别再推这个」的菜大幅降权，随天数自行回升。
+ * 形状与腻味系数一致，只是时间常数长得多。
+ *
+ * 注意这是降权不是排除 —— 候选池小的时候，被静音的菜仍可能排在最前。
+ * 这是设计时明知并接受的取舍（见 2026-08-26 spec §3.3）；若真机上出现
+ * 「按了没用」的观感，应回到该节重新评估改为硬过滤。
+ */
+export function muteOf({ lastMutedKey, nowKey }) {
+  const d = daysBetweenKeys(lastMutedKey, nowKey);
+  if (d === Infinity) return 1;
+  return (
+    CONFIG.MUTE_FLOOR +
+    (1 - CONFIG.MUTE_FLOOR) * (1 - Math.exp(-d / CONFIG.MUTE_TAU_DAYS))
+  );
+}
+
+/**
  * 一句话推荐理由。按 spec §6.8 的顺序取第一个命中的分支。
  * 带理由的推荐更容易被接受，能实际压低"换一个"的点击率 —— 这不是装饰。
  */
@@ -137,6 +154,7 @@ export function recommend({
   const observations = reduceObservations(events);
   const dishesById = new Map(dishes.map((d) => [d.id, d]));
   const eaten = buildEatenIndex(observations, dishesById);
+  const muted = buildMutedIndex(events);
   const nowKey = localDateKey(now);
 
   const obsByDish = new Map();
@@ -160,10 +178,11 @@ export function recommend({
         .filter(Boolean),
       nowKey,
     });
+    const mute = muteOf({ lastMutedKey: muted.get(dish.id), nowKey });
     const base = CONFIG.W_TASTE * taste + CONFIG.W_VALUE * value;
     const jitter =
       CONFIG.JITTER_MIN + random() * (CONFIG.JITTER_MAX - CONFIG.JITTER_MIN);
-    return { dish, obs, taste, value, fatigue, score: base * fatigue.total * jitter };
+    return { dish, obs, taste, value, fatigue, score: base * fatigue.total * mute * jitter };
   });
 
   const maxTaste = Math.max(...rows.map((r) => r.taste));

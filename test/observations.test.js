@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reduceObservations, buildEatenIndex, pendingFeedback, currentPick } from '../src/observations.js';
+import { reduceObservations, buildEatenIndex, buildMutedIndex, pendingFeedback, currentPick } from '../src/observations.js';
 
 const at = (dayOffset, hour) =>
   new Date(2026, 7, 22 + dayOffset, hour, 0).getTime();
@@ -402,4 +402,16 @@ test('currentPick 忽略其他饭点和其他日期的事件', () => {
     { ...evt('recommended', 'b', 12), ts: new Date(2026, 7, 21, 12, 0).getTime() },
   ], 'lunch', '2026-08-22');
   assert.equal(p.activeDishId, null);
+});
+
+test('buildMutedIndex 取每道菜最近一次 muted 的日期', () => {
+  const idx = buildMutedIndex([
+    ev('muted', 'd1', at(0, 12)),
+    ev('muted', 'd1', at(2, 12)),
+    ev('muted', 'd2', at(1, 12)),
+    ev('recommended', 'd3', at(1, 12)),
+  ]);
+  assert.equal(idx.get('d1'), '2026-08-24');
+  assert.equal(idx.get('d2'), '2026-08-23');
+  assert.equal(idx.get('d3'), undefined);
 });
