@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterCandidates, tasteOf, effectivePriceOf, valueOf, fatigueOf, muteOf, reasonFor, recommend } from '../src/recommender.js';
+import { filterCandidates, tasteOf, effectivePriceOf, valueOf, fatigueOf, muteOf, reasonFor, recommend, rankCandidates } from '../src/recommender.js';
 import { CONFIG } from '../src/config.js';
 
 const DAY = 86400000;
@@ -461,4 +461,40 @@ test('被静音的菜在评分中被压低', () => {
   // 固定 random 消除抖动，两道菜其余条件完全相同。
   const r = recommend({ dishes, shops, events, slot: 'lunch', now: NOW, random: () => 0.5 });
   assert.equal(r.dish.id, 'b');
+});
+
+test('rankCandidates 返回全部候选并按分数降序', () => {
+  const dishes = [
+    { id: 'a', shopId: 's1', name: 'A', refPrice: 10, slots: ['lunch'], tags: [] },
+    { id: 'b', shopId: 's1', name: 'B', refPrice: 20, slots: ['lunch'], tags: [] },
+    { id: 'c', shopId: 's1', name: 'C', refPrice: 30, slots: ['lunch'], tags: [] },
+  ];
+  const shops = [{ id: 's1', name: 'S', hygiene: 'unknown' }];
+  const ranked = rankCandidates({ dishes, shops, events: [], slot: 'lunch', now: NOW, random: () => 0.5 });
+  assert.equal(ranked.length, 3);
+  for (let i = 1; i < ranked.length; i++) {
+    assert.ok(ranked[i - 1].score >= ranked[i].score, '应按分数降序');
+  }
+  for (const row of ranked) {
+    assert.equal(typeof row.reason, 'string');
+    assert.ok(row.reason.length > 0, '每条候选都要有理由');
+  }
+});
+
+test('rankCandidates 无候选时返回空数组', () => {
+  const ranked = rankCandidates({ dishes: [], shops: [], events: [], slot: 'lunch', now: NOW });
+  assert.deepEqual(ranked, []);
+});
+
+test('recommend 返回的就是 rankCandidates 的第一条', () => {
+  const dishes = [
+    { id: 'a', shopId: 's1', name: 'A', refPrice: 10, slots: ['lunch'], tags: [] },
+    { id: 'b', shopId: 's1', name: 'B', refPrice: 30, slots: ['lunch'], tags: [] },
+  ];
+  const shops = [{ id: 's1', name: 'S', hygiene: 'unknown' }];
+  const args = { dishes, shops, events: [], slot: 'lunch', now: NOW, random: () => 0.5 };
+  const ranked = rankCandidates(args);
+  const one = recommend(args);
+  assert.equal(one.dish.id, ranked[0].dish.id);
+  assert.equal(one.reason, ranked[0].reason);
 });

@@ -135,11 +135,13 @@ export function reasonFor({
 }
 
 /**
- * 唯一对外入口：给定候选池与全部历史事件，选出这一顿该吃什么。
+ * 给定候选池与全部历史事件，把这一顿的全部候选按分数从高到低排好。
+ * 轮播直接消费这个列表 —— 排序只在页面加载时算一次，浏览期间不重算，
+ * 否则划动过程中顺序会变。
  *
  * now 与 random 都由调用方注入 —— 这是本模块保持纯函数、可完整测试的前提。
  */
-export function recommend({
+export function rankCandidates({
   dishes,
   shops,
   events = [],
@@ -149,7 +151,7 @@ export function recommend({
   random = Math.random,
 }) {
   const candidates = filterCandidates({ dishes, shops, slot, excludedDishIds });
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return [];
 
   const observations = reduceObservations(events);
   const dishesById = new Map(dishes.map((d) => [d.id, d]));
@@ -182,26 +184,43 @@ export function recommend({
     const base = CONFIG.W_TASTE * taste + CONFIG.W_VALUE * value;
     const jitter =
       CONFIG.JITTER_MIN + random() * (CONFIG.JITTER_MAX - CONFIG.JITTER_MIN);
-    return { dish, obs, taste, value, fatigue, score: base * fatigue.total * mute * jitter };
+    return {
+      dish,
+      obs,
+      taste,
+      value,
+      score: base * fatigue.total * mute * jitter,
+      fDish: fatigue.fDish,
+    };
   });
 
   const maxTaste = Math.max(...rows.map((r) => r.taste));
   const maxValue = Math.max(...rows.map((r) => r.value));
-  const best = rows.reduce((a, b) => (b.score > a.score ? b : a));
 
-  let lastRatedValue = null;
-  for (const obs of best.obs) {
-    if (obs.source === 'rated') lastRatedValue = obs.ratedValue; // obs 已按 ts 升序
-  }
+  return rows
+    .sort((a, b) => b.score - a.score)
+    .map((r) => {
+      let lastRatedValue = null;
+      for (const obs of r.obs) {
+        if (obs.source === 'rated') lastRatedValue = obs.ratedValue; // obs 已按 ts 升序
+      }
+      return {
+        dish: r.dish,
+        score: r.score,
+        reason: reasonFor({
+          hasObservations: r.obs.length > 0,
+          lastRatedValue,
+          isTopTaste: r.taste === maxTaste,
+          isTopValue: r.value === maxValue,
+          fDish: r.fDish,
+        }),
+      };
+    });
+}
 
-  return {
-    dish: best.dish,
-    reason: reasonFor({
-      hasObservations: best.obs.length > 0,
-      lastRatedValue,
-      isTopTaste: best.taste === maxTaste,
-      isTopValue: best.value === maxValue,
-      fDish: best.fatigue.fDish,
-    }),
-  };
+/** 只要分最高那一道。保留此入口是为了让既有调用方与测试不必改。 */
+export function recommend(args) {
+  const ranked = rankCandidates(args);
+  if (ranked.length === 0) return null;
+  return { dish: ranked[0].dish, reason: ranked[0].reason };
 }
