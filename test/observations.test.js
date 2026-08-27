@@ -113,6 +113,22 @@ test('不同饭点、不同日期各自保留自己最后那条', () => {
   );
 });
 
+test('同一顿里划开又划回来时，选中的是最后停留的那道', () => {
+  // A → B → 划回 A：A 组的 ts 锚在第一次（targetTs 要靠它），
+  // 但这一顿的观察值必须是 A，不能因为 B 的 ts 更晚就选 B。
+  const obs = reduceObservations([
+    ev('recommended', 'a', at(0, 12)),
+    ev('recommended', 'b', at(0, 12) + 2000),
+    ev('recommended', 'a', at(0, 12) + 4000),
+    ev('clicked', 'a', at(0, 12) + 5000),
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dishId, 'a');
+  assert.equal(obs[0].value, 0.65);
+  // ts 仍是最早那次 —— 反馈浮层的 targetTs 回指依赖这一点。
+  assert.equal(obs[0].ts, at(0, 12));
+});
+
 test('同一天不同饭点的同一道菜是两条观察值', () => {
   const obs = reduceObservations([
     ev('recommended', 'd1', at(0, 12), 'lunch'),

@@ -27,6 +27,7 @@ export function reduceObservations(events) {
           slot: e.slot,
           dishId: e.dishId,
           ts: e.ts,
+          lastRecommendedTs: e.ts,
           events: [e],
         };
         groups.set(key, group);
@@ -38,11 +39,18 @@ export function reduceObservations(events) {
         }
         groupsBySlotDish.get(slotDishKey).push(group);
       } else {
-        // 同一个 dateKey|slot|dishId 有多个 recommended 事件（页面重载）
-        // 保留最早的 ts
+        // 同一个 dateKey|slot|dishId 有多个 recommended 事件：页面重载，
+        // 或者用户在轮播里划开又划回来。
+        //
+        // ts 保留最早的 —— 反馈浮层的 targetTs 回指的就是它，它必须稳定。
+        // lastRecommendedTs 另记最晚的 —— 判断「这一顿最后停在哪道菜」要用它。
+        // 两个语义必须分开：合成一个字段就会在「A → B → 回到 A」时选错组。
         const group = groups.get(key);
         if (e.ts < group.ts) {
           group.ts = e.ts;
+        }
+        if (e.ts > group.lastRecommendedTs) {
+          group.lastRecommendedTs = e.ts;
         }
         group.events.push(e);
       }
@@ -91,11 +99,16 @@ export function reduceObservations(events) {
   // 一顿只认最后一条推荐。
   // 用户可以在轮播里左右浏览，系统最初推的是 A、他最终在 B 上下单，
   // 这一顿的观察值就该是 B。被丢弃的组连同挂在它上面的反应事件一起作废。
+  //
+  // 比较用 lastRecommendedTs 而非 ts：ts 被「保留最早」的去重语义占用了，
+  // 用它比较会在「A → B → 划回 A」时误选 B。
   const latestPerMeal = new Map(); // key = dateKey|slot -> group
   for (const group of groups.values()) {
     const mealKey = `${group.dateKey}|${group.slot}`;
     const kept = latestPerMeal.get(mealKey);
-    if (!kept || group.ts > kept.ts) latestPerMeal.set(mealKey, group);
+    if (!kept || group.lastRecommendedTs > kept.lastRecommendedTs) {
+      latestPerMeal.set(mealKey, group);
+    }
   }
 
   // 减缩每个组
