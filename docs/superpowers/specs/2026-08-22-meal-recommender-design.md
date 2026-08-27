@@ -59,6 +59,7 @@ iOS 从不要求 Service Worker 才能「添加到主屏幕」，`display: stand
 已知后果：弱网时页面打不开；iOS Web Push 强制依赖 SW，因此该路线在 v1 关闭。
 
 ### 3.6 每顿只给一个推荐
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 给三个并排选择只是把纠结从 50 个店缩小到 3 个，没有真正消除它。
 
@@ -111,6 +112,7 @@ iOS 从不要求 Service Worker 才能「添加到主屏幕」，`display: stand
 粒度定在**菜品**而非店铺：「今天吃黄焖鸡」比「今天吃 XX 家」更能消灭纠结，且同一家店不同菜的好吃程度差别很大。跳转链接挂在店铺上，同店所有菜共用。
 
 ### 5.3 `events`
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -157,6 +159,7 @@ recommend({ dishes, shops, events, slot, now, excludedDishIds }) -> { dish, reas
 过滤后为空则返回 `null`，UI 显示引导用户去候选池添加菜品。
 
 ### 6.2 从事件流归约出观察值
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 以一次 `recommended` 事件为起点，**同一本地日期、同一 `slot`、同一 `dishId`** 的后续事件构成一个 observation。所有日期与「天数差」的计算一律按设备本地时区取自然日。
 
@@ -181,6 +184,7 @@ recommend({ dishes, shops, events, slot, now, excludedDishIds }) -> { dish, reas
 `skipped` 的存在是为了修正 `clicked` 的 `0.65`：用户可能点了跳转但被配送费或评价劝退。有了显式的「没吃成」，这条信号才不会被错误地记成「他想吃」。
 
 ### 6.3 好吃度 `taste ∈ [0,1]`
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 对该菜的全部 observation 做**时间加权平均**，半衰期 `TASTE_HALFLIFE_DAYS = 60`：
 
@@ -204,6 +208,7 @@ taste  = Σ(w_i · v_i) / Σ(w_i)
 用百分位而非绝对值：用户永远不必定义「多少钱算便宜」，它自动适应其消费水平。
 
 ### 6.5 腻味系数 `fatigue ∈ (0,1]`
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 三个乘性衰减，全部基于「真的吃了」的日期（即 `rated` 为 `good`/`ok`/`bad` 的事件；`skipped` 不算吃过）：
 
@@ -223,6 +228,7 @@ fatigue = max(0.02, f_dish · f_shop · f_tag)
 `f_shop` 与 `f_tag` 的作用是防止连着三顿都是川菜或都来自同一家店。
 
 ### 6.6 最终评分
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 ```
 score = (0.7 · taste + 0.3 · value) · fatigue · jitter
@@ -232,6 +238,7 @@ jitter ~ Uniform(0.85, 1.15)
 取 `score` 最高者。`jitter` 保证数据稳定后也不会天天推同一道菜。
 
 ### 6.7 常数集中管理
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 以上全部常数写在一个 `CONFIG` 对象中，便于后续凭使用体感直接修改：
 
@@ -277,6 +284,7 @@ const CONFIG = {
 两个页面加一个浮层。
 
 ### 7.1 「今天这顿」
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 入口 URL：`/?slot=lunch`。未带 `slot` 参数时按当前时间推断：10:30 前为 `breakfast`，15:00 前为 `lunch`，之后为 `dinner`。
 
@@ -356,6 +364,7 @@ GitHub Pages，仓库路径 `/meal/`。需包含 `manifest.json`（`display: sta
 ## 9. 测试策略
 
 ### 9.1 自动化测试
+> **已于 2026-08-26 修订**，见 `2026-08-26-browse-and-implicit-signals-design.md`。以下原文保留以便追溯当初为何这样设计。
 
 `recommender` 为纯函数、零依赖，用 Node 自带的 `node:test` 运行，不引入任何测试框架。必须覆盖：
 
@@ -363,6 +372,10 @@ GitHub Pages，仓库路径 `/meal/`。需包含 `manifest.json`（`display: sta
 - 全部店铺被拉黑 → 返回 `null`
 - 零事件冷启动 → 所有菜 `taste` 均为 0.7，不崩溃
 - 连续换两次后仍能给出第三个不同的推荐
+
+> 其中「连续换两次后仍能给出第三个不同的推荐」随 2026-08-26 修订作废 ——
+> 换的次数已无上限，取而代之的是 `rankCandidates` 返回完整排序候选的测试。
+
 - 昨天刚吃过的菜排序明显靠后
 - 候选集只有一道菜时价格百分位不崩（`value = 0.5`）
 - 事件流归约优先级：同一顿内 `rated` 覆盖 `clicked`
