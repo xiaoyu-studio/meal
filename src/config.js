@@ -16,7 +16,6 @@ export const CONFIG = {
   LONG_TIME_FDISH: 0.85,
   JITTER_MIN: 0.85,
   JITTER_MAX: 1.15,
-  MAX_SWAPS: 2,
 };
 
 export const SLOTS = ['breakfast', 'lunch', 'dinner'];

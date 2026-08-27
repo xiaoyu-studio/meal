@@ -356,52 +356,40 @@ const evt = (type, dishId, hour, minute = 0, slot = 'lunch') => ({
 
 test('currentPick 对空事件返回无选择', () => {
   const p = currentPick([], 'lunch', '2026-08-22');
-  assert.deepEqual(p, { activeDishId: null, swappedDishIds: [], swapCount: 0 });
+  assert.deepEqual(p, { activeDishId: null, activeReason: null });
 });
 
-test('currentPick 返回当前未被换掉的推荐', () => {
-  const p = currentPick([evt('recommended', 'a', 12)], 'lunch', '2026-08-22');
-  assert.equal(p.activeDishId, 'a');
-  assert.equal(p.swapCount, 0);
-});
-
-test('currentPick 在换过之后返回新的推荐并计数', () => {
+test('currentPick 返回这一顿最后一条推荐及其理由', () => {
   const p = currentPick([
-    evt('recommended', 'a', 12, 0),
-    evt('swapped', 'a', 12, 1),
-    evt('recommended', 'b', 12, 2),
+    { ...evt('recommended', 'a', 12), value: '还没试过，试试看' },
+    { ...evt('recommended', 'b', 12, 30), value: '你上次说好吃' },
   ], 'lunch', '2026-08-22');
   assert.equal(p.activeDishId, 'b');
-  assert.deepEqual(p.swappedDishIds, ['a']);
-  assert.equal(p.swapCount, 1);
+  assert.equal(p.activeReason, '你上次说好吃');
 });
 
-test('currentPick 在刚换掉还没推新的时返回 null', () => {
-  const p = currentPick([
-    evt('recommended', 'a', 12, 0),
-    evt('swapped', 'a', 12, 1),
-  ], 'lunch', '2026-08-22');
-  assert.equal(p.activeDishId, null);
-  assert.equal(p.swapCount, 1);
-});
-
-test('currentPick 对同一道菜的重复 swapped 只计一次（防连点烧掉两次机会）', () => {
-  const p = currentPick([
-    evt('recommended', 'a', 12, 0),
-    evt('swapped', 'a', 12, 1),
-    evt('swapped', 'a', 12, 2),
-  ], 'lunch', '2026-08-22');
-  assert.deepEqual(p.swappedDishIds, ['a']);
-  assert.equal(p.swapCount, 1);
-  assert.equal(p.activeDishId, null);
+test('currentPick 对没存理由的旧事件返回 null 理由', () => {
+  const p = currentPick([evt('recommended', 'a', 12)], 'lunch', '2026-08-22');
+  assert.equal(p.activeDishId, 'a');
+  assert.equal(p.activeReason, null);
 });
 
 test('currentPick 忽略其他饭点和其他日期的事件', () => {
   const p = currentPick([
-    evt('recommended', 'a', 19, 0, 'dinner'),
-    { ...evt('recommended', 'b', 12), ts: new Date(2026, 7, 21, 12, 0).getTime() },
+    evt('recommended', 'x', 12, 0, 'dinner'),
+    { ...evt('recommended', 'y', 12), ts: new Date(2026, 7, 21, 12, 0).getTime() },
   ], 'lunch', '2026-08-22');
   assert.equal(p.activeDishId, null);
+});
+
+test('currentPick 忽略非 recommended 的事件', () => {
+  const p = currentPick([
+    { ...evt('recommended', 'a', 12), value: '换换口味' },
+    evt('clicked', 'a', 12, 5),
+    evt('muted', 'a', 12, 6),
+  ], 'lunch', '2026-08-22');
+  assert.equal(p.activeDishId, 'a');
+  assert.equal(p.activeReason, '换换口味');
 });
 
 test('buildMutedIndex 取每道菜最近一次 muted 的日期', () => {

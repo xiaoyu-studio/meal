@@ -1,4 +1,4 @@
-import { SLOT_LABELS, SLOTS, CONFIG } from './config.js';
+import { SLOT_LABELS, SLOTS } from './config.js';
 import { slotFromTime, localDateKey } from './dates.js';
 import { currentPick, pendingFeedback, reduceObservations } from './observations.js';
 import { recommend } from './recommender.js';
@@ -22,7 +22,7 @@ function showFailure(err) {
   el('failure').hidden = false;
 }
 
-let state = { slot: null, dish: null, shop: null, swapCount: 0 };
+let state = { slot: null, dish: null, shop: null };
 
 const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '没吃成' };
 
@@ -145,30 +145,23 @@ async function render() {
     // 这一顿已经定下的，重载时不重新掷骰子。
     if (pick.activeDishId) {
       dish = dishes.find((d) => d.id === pick.activeDishId) ?? null;
-      if (dish) reason = '这顿已经定了';
+      if (dish) reason = pick.activeReason ?? '换换口味';
     }
 
     if (!dish) {
       // 正在补问的那道菜这一顿不再推：不能一边问「上顿的黄焖鸡怎么样」
       // 一边又端上同一道黄焖鸡。
       const asking = pendingFeedback(reduceObservations(events), now, slot);
-      const excludedDishIds = asking
-        ? [...pick.swappedDishIds, asking.dishId]
-        : pick.swappedDishIds;
+      const excludedDishIds = asking ? [asking.dishId] : [];
 
       // 但候选池小到只剩它时，宁可重复推荐也不能显示「没有可推的」。
       const result =
         recommend({ dishes, shops, events, slot, now, excludedDishIds }) ??
-        (asking
-          ? recommend({
-              dishes, shops, events, slot, now,
-              excludedDishIds: pick.swappedDishIds,
-            })
-          : null);
+        (asking ? recommend({ dishes, shops, events, slot, now }) : null);
       if (result) {
         dish = result.dish;
         reason = result.reason;
-        await appendEvent({ slot, dishId: dish.id, type: 'recommended' });
+        await appendEvent({ slot, dishId: dish.id, type: 'recommended', value: reason });
       }
     }
 
@@ -180,14 +173,13 @@ async function render() {
     }
 
     const shop = shops.find((s) => s.id === dish.shopId);
-    state = { slot, dish, shop, swapCount: pick.swapCount };
+    state = { slot, dish, shop };
 
     el('slot-label').textContent = SLOT_LABELS[slot];
     el('dish-name').textContent = dish.name;
     el('shop-name').textContent = shop.name;
     el('price').textContent = `约 ¥${dish.refPrice}`;
     el('reason').textContent = reason;
-    el('swap').hidden = pick.swapCount >= CONFIG.MAX_SWAPS;
     el('failure').hidden = true;
     el('empty').hidden = true;
     el('card').hidden = false;

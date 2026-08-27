@@ -210,26 +210,24 @@ export function pendingFeedback(observations, nowTs, slot) {
 }
 
 /**
- * 今天这一顿的当前状态，完全从事件流推导 —— 因此页面重载不会丢失
- * 已换次数，也不会让已经定下的这顿重新掷骰子。
+ * 今天这一顿的当前状态，完全从事件流推导 —— 因此页面重载不会让
+ * 已经定下的这顿重新掷骰子。
+ *
+ * 取最后一条 recommended 而非最早那条：用户可以在轮播里浏览，
+ * 最终在别的菜上下单时会补写一条，那条才代表这一顿。
  */
 export function currentPick(events, slot, nowKey) {
-  const todays = events.filter(
-    (e) => e.slot === slot && localDateKey(e.ts) === nowKey,
-  );
-
-  const swappedDishIds = [
-    ...new Set(todays.filter((e) => e.type === 'swapped').map((e) => e.dishId)),
-  ];
-  const swapped = new Set(swappedDishIds);
-
-  const alive = todays
-    .filter((e) => e.type === 'recommended' && !swapped.has(e.dishId))
-    .sort((a, b) => a.ts - b.ts);
+  let latest = null;
+  for (const e of events) {
+    if (e.type !== 'recommended') continue;
+    if (e.slot !== slot) continue;
+    if (localDateKey(e.ts) !== nowKey) continue;
+    if (latest === null || e.ts > latest.ts) latest = e;
+  }
 
   return {
-    activeDishId: alive.length ? alive[alive.length - 1].dishId : null,
-    swappedDishIds,
-    swapCount: swappedDishIds.length,
+    activeDishId: latest ? latest.dishId : null,
+    // 旧事件的 value 是 null，UI 那边兜底。
+    activeReason: latest && typeof latest.value === 'string' ? latest.value : null,
   };
 }
