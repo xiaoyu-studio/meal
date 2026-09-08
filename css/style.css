@@ -271,10 +271,12 @@ body {
 
 .dish-stat { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
 
-/* 轮播位置指示。不做圆点是因为候选可能有几十道，圆点会排到屏幕外。 */
+/* 轮播位置指示。不做圆点是因为候选可能有几十道，圆点会排到屏幕外。
+   排在卡片内容的末尾、三个按钮之前 —— 它说明的是「你在看第几道」，
+   属于内容不属于操作。夹在按钮中间会让人以为它跟某个按钮有关。 */
 .carousel-pos {
   color: var(--muted);
   font-size: 0.8rem;
   text-align: center;
-  margin: 0.5rem 0 0;
+  margin: 0 0 1.25rem;
 }
