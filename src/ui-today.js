@@ -3,7 +3,7 @@ import { slotFromTime, localDateKey } from './dates.js';
 import { currentPick, pendingFeedback, reduceObservations } from './observations.js';
 import { rankCandidates } from './recommender.js';
 import { loadAll, appendEvent, setHygiene } from './store.js';
-import { openShopLink, copyText } from './deeplink.js';
+import { setShopLink, copyText } from './deeplink.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -145,6 +145,8 @@ function showAt(index) {
   el('price').textContent = `约 ¥${row.dish.refPrice}`;
   el('reason').textContent = row.reason;
   el('carousel-pos').textContent = `${index + 1} / ${state.ranked.length}`;
+  // 每翻一张都要重挂 —— 换了菜就换了店，href 不跟着走就会跳到上一家。
+  setShopLink(el('order'), shop.link);
   el('failure').hidden = true;
   el('empty').hidden = true;
   el('card').hidden = false;
@@ -218,32 +220,52 @@ async function render() {
   }
 }
 
-el('order').addEventListener('click', async () => {
-  if (!state.dish) return;
+/**
+ * 记下「去下单」这一次点击。跟页面跳转并行跑，所以自己吞掉全部错误 ——
+ * 抛出去也没人接得住，页面下一刻就走了。
+ *
+ * 入参是点击那一刻的 state 快照，不读模块变量：这个函数在导航期间才跑完，
+ * 期间用户可能已经划到别的菜上了。
+ */
+async function recordOrder({ slot, dish, ranked, index, recordedDishId }) {
   // 用户可能浏览到了别的菜上。这一顿的观察值应当落在他真正下单的那道，
   // 所以先补一条 recommended —— 归约那边只认最后一条。
-  // 用 state.recordedDishId 判断，不必再读一次库。
-  if (state.recordedDishId !== state.dish.id) {
+  // 用 recordedDishId 判断，不必再读一次库。
+  if (recordedDishId !== dish.id) {
     try {
       await appendEvent({
-        slot: state.slot, dishId: state.dish.id,
-        type: 'recommended', value: state.ranked[state.index].reason,
+        slot, dishId: dish.id, type: 'recommended', value: ranked[index].reason,
       });
-      state = { ...state, recordedDishId: state.dish.id };
+      // 只有当用户还停在这道菜上时才更新 —— 否则会把划走之后的状态写脏。
+      if (state.dish?.id === dish.id) state = { ...state, recordedDishId: dish.id };
     } catch (err) {
       // 补写失败就不改 recordedDishId，下次点还会再试一遍。
       console.error('补写 recommended 事件失败', err);
     }
   }
   try {
-    await appendEvent({
-      slot: state.slot, dishId: state.dish.id, type: 'clicked',
-    });
+    await appendEvent({ slot, dishId: dish.id, type: 'clicked' });
   } catch (err) {
     // 记录失败不该拦住下单 —— 日志是记账，不是门槛。
     console.error('记录「去下单」事件失败', err);
   }
-  openShopLink(state.shop.link);
+}
+
+// 不 preventDefault，也不 await：跳转交给 <a href> 的默认行为完成，那是
+// 唤起外卖 App 的前提（见 deeplink.js）。代价是这两条写入跟导航赛跑。
+//
+// 赛输了会怎样，两条都不致命：
+//   `clicked` 丢了只是少一条 0.65 的隐式信号，第二天照样会补问这一顿 ——
+//   补问认的是 recommended 那条，它在渲染时就写好了，不参与这场赛跑。
+//   补写的 recommended 丢了更明显：切回来时卡片退回原来那道菜，看得见，
+//   再点一次就补上了。
+//
+// 之所以敢赛：openDB 的 promise 是缓存的（store.js），页面渲染时就已经打开，
+// 所以 appendEvent 里那个 await 只跨一个微任务，事务在导航发出前就排进去了。
+el('order').addEventListener('click', () => {
+  // 没有 href 说明链接不合法，点了也不会跳 —— 不该记一条「下单」。
+  if (!state.dish || !el('order').href) return;
+  recordOrder(state);
 });
 
 el('swap').addEventListener('click', () => {

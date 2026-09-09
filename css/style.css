@@ -76,6 +76,15 @@ body {
   cursor: pointer;
 }
 
+/* 「去下单」是 <a>（Universal Links 唤不起脚本跳转，见 deeplink.js）。
+   链接不合法时 setShopLink 会摘掉 href，点不动了 —— 外观必须跟着变，
+   否则用户只会觉得按钮坏了。兜底路径是下面的「复制店名」。 */
+.primary[aria-disabled="true"] {
+  background: var(--line);
+  color: var(--muted);
+  cursor: default;
+}
+
 .ghost {
   display: block;
   width: 100%;

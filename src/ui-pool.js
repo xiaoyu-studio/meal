@@ -2,6 +2,7 @@ import { SLOTS, SLOT_LABELS } from './config.js';
 import { reduceObservations } from './observations.js';
 import { tasteOf } from './recommender.js';
 import { snapshotFilename } from './snapshot.js';
+import { isSafeLink } from './deeplink.js';
 import {
   loadAll, putShop, putDish, deleteShop, deleteDish, setHygiene,
   newId, exportSnapshot, importSnapshot,
@@ -25,20 +26,6 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-/**
- * 只放行 http/https 链接。<input type="url"> 会把 javascript:xxx 当成合法的
- * 绝对 URL 放行，而这个链接后面会被拼进 <a href> 和 openShopLink 的
- * location.href 赋值里 —— 两处都会执行它。分享链接是全应用唯一的真正外部
- * 输入，必须在存库前挡住。
- */
-function isSafeLink(link) {
-  try {
-    const u = new URL(link);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 失败态下把失败卡片以外的一切收起来，跟 ui-today 的排他式失败态对齐。

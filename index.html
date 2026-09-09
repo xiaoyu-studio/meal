@@ -22,7 +22,9 @@
     <p id="price" class="price"></p>
     <p id="reason" class="reason"></p>
     <p id="carousel-pos" class="carousel-pos"></p>
-    <button id="order" class="primary" type="button">去下单</button>
+    <!-- 必须是真实的 <a>，不能是 <button> + location.href：iOS 的 Universal
+         Links 唤不起脚本发起的跳转。href 由 showAt() 逐张卡片写入。 -->
+    <a id="order" class="primary">去下单</a>
     <button id="copy-shop" class="ghost" type="button">复制店名</button>
     <button id="mute" class="ghost" type="button">别再推这个</button>
   </section>
