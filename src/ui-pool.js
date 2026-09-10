@@ -1,5 +1,5 @@
 import { SLOTS, SLOT_LABELS } from './config.js';
-import { reduceObservations } from './observations.js';
+import { buildMutedIndex, reduceObservations } from './observations.js';
 import { tasteOf } from './recommender.js';
 import { snapshotFilename } from './snapshot.js';
 import { isSafeLink } from './deeplink.js';
@@ -108,6 +108,13 @@ async function render() {
       list.push(obs);
     }
 
+    // 「别再推这个」是全应用唯一按下去就产生持久后果、且没有撤销出口的按钮，
+    // 位置还紧挨着「复制店名」。至少让它的状态在这里看得见 —— 否则误触之后
+    // 既不知道是哪道菜，也不知道生没生效，再按一次还会把时钟重新拨满。
+    // 只显示事实（哪天按的），不显示「还剩几天失效」：静音是连续衰减不是开关，
+    // 编一个「静音中/已过期」的阈值出来反而是在撒谎。
+    const muted = buildMutedIndex(events);
+
     el('shops').innerHTML = shops
       .map((shop) => {
         const rows = dishes
@@ -117,9 +124,18 @@ async function render() {
             const taste = tasteOf(obs, now).toFixed(2);
             const eatenCount = obs.filter((o) => o.eaten).length;
             const slotText = (d.slots ?? []).map((s) => SLOT_LABELS[s] ?? s).join('/');
+            // 挂在左半边而不是右边的 .dish-stat：那一栏是 white-space: nowrap，
+            // 再往里塞会在 375px 上把菜名挤没。
+            // 375px 下左栏只有 126px，「¥31・午/晚」加上这段一定会换行 ——
+            // 所以干脆写成独占一行（CSS 里 display: block），不要用「・」当
+            // 行内分隔符：一换行那个点就吊在行首，像个没擦掉的字符。
+            const mutedKey = muted.get(d.id);
+            const mutedHtml = mutedKey
+              ? `<span class="dish-muted">已静音 · ${esc(mutedKey.slice(5))}</span>`
+              : '';
             return `
               <div class="dish-row">
-                <span>${esc(d.name)}　<span class="shop-meta">¥${esc(d.refPrice)}・${esc(slotText)}</span></span>
+                <span>${esc(d.name)}　<span class="shop-meta">¥${esc(d.refPrice)}・${esc(slotText)}</span>${mutedHtml}</span>
                 <span class="dish-stat">
                   好吃度 ${taste}・吃过 ${eatenCount} 次
                   <button class="link" data-del-dish="${esc(d.id)}" type="button">删</button>
@@ -195,9 +211,10 @@ el('shop-form').addEventListener('submit', async (e) => {
   }
 
   try {
+    const name = f.get('name').trim();
     await putShop({
       id: newId(),
-      name: f.get('name').trim(),
+      name,
       platform: f.get('platform'),
       link,
       hygiene: f.get('hygiene'),
@@ -206,6 +223,9 @@ el('shop-form').addEventListener('submit', async (e) => {
     msg.textContent = '';
     e.target.reset();
     await render();
+    // 店铺列表的顺序是按主键排的（shops 没有创建时间字段），新店不一定
+    // 出现在表单正下方 —— 不给提示的话，用户会以为没保存上又填一遍。
+    showToast(`已添加「${name}」`);
   } catch (err) {
     console.error('保存店铺失败', err);
     msg.textContent = '保存失败，请稍后重试。';
@@ -227,16 +247,20 @@ el('shops').addEventListener('submit', async (e) => {
   }
 
   try {
+    const name = f.get('name').trim();
     await putDish({
       id: newId(),
       shopId,
-      name: f.get('name').trim(),
+      name,
       refPrice: Number(f.get('refPrice')),
       tags: f.get('tags').split(/[,，]/).map((t) => t.trim()).filter(Boolean),
       slots,
       active: true,
     });
     await render();
+    // 同「加一家店」：render() 会重画整页，加菜表单跟着收起，
+    // 不给提示就看不出发生过什么。
+    showToast(`已添加「${name}」`);
   } catch (err) {
     console.error('保存菜品失败', err);
     if (msgEl) msgEl.textContent = '保存失败，请稍后重试。';

@@ -169,6 +169,15 @@ body {
   color: var(--fg);
   font-size: 1rem;
 }
+/* 填实付价的结果反馈。以前保存成功和输了非法值都是「输入框一收，没了」，
+   两种情况长得一模一样 —— 这是全应用最容易让人以为存上了而其实没存的地方。 */
+.fb-price-msg {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.fb-price-msg[hidden] { display: none; }
+
 .fb-price-box button {
   padding: 0.75rem 1.25rem;
   border: none;
@@ -279,6 +288,17 @@ body {
 }
 
 .dish-stat { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+
+/* 被「别再推这个」按过的菜。用强调色而不是灰色 —— 这是个用户主动做过的
+   决定，不是背景信息，得能一眼扫到。
+   独占一行是量出来的结果不是偏好：375px 下左栏只剩 126px，接在
+   「¥31・午/晚」后面必然换行，与其让它半吊着不如写死。 */
+.dish-muted {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+}
 
 /* 轮播位置指示。不做圆点是因为候选可能有几十道，圆点会排到屏幕外。
    排在卡片内容的末尾、三个按钮之前 —— 它说明的是「你在看第几道」，

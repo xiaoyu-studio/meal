@@ -64,6 +64,7 @@ async function renderFeedback() {
           <input type="number" step="0.01" inputmode="decimal" placeholder="实付价（元）">
           <button type="button" data-action="save-price">保存</button>
         </div>
+        <p class="fb-price-msg" hidden></p>
       </div>
     `;
     // dish.name 来自用户在候选池里填写的数据（Task 15），不能当作可信 HTML 拼进
@@ -112,14 +113,23 @@ async function renderFeedback() {
         }
 
         if (button.dataset.action === 'save-price') {
+          const msg = overlay.querySelector('.fb-price-msg');
           const amount = Number(overlay.querySelector('.fb-price-box input').value);
-          if (Number.isFinite(amount) && amount > 0) {
-            await appendEvent({
-              slot: target.slot, dishId: target.dishId, targetTs: target.ts,
-              type: 'paid', value: amount,
-            });
+          // 非法输入以前是静默吞掉、输入框照样收起来 —— 看起来跟保存成功
+          // 一模一样。这是全应用最容易让人以为「存上了」而其实没存的地方。
+          if (!Number.isFinite(amount) || amount <= 0) {
+            msg.textContent = '请输入大于 0 的金额。';
+            msg.hidden = false;
+            return;
           }
+          await appendEvent({
+            slot: target.slot, dishId: target.dishId, targetTs: target.ts,
+            type: 'paid', value: amount,
+          });
           overlay.querySelector('.fb-price-box').hidden = true;
+          // 写成功才说成功：appendEvent 抛异常会被下面的 catch 接走并关掉浮层。
+          msg.textContent = `已记下实付 ¥${amount}`;
+          msg.hidden = false;
         }
       } catch (err) {
         // 反馈写入失败不该把浮层卡死在打开状态——记录并关闭，用户下次还有机会。
@@ -307,7 +317,11 @@ el('mute').addEventListener('click', async () => {
     console.error('记录「别再推这个」事件失败', err);
     const original = el('reason').textContent;
     el('reason').textContent = '没记上，请稍后再试';
-    setTimeout(() => { el('reason').textContent = original; }, 2000);
+    // 这 2 秒里用户可以翻页。恢复前确认还停在同一张卡片上，
+    // 否则会把旧卡片的理由写到新卡片上去。
+    setTimeout(() => {
+      if (state.dish?.id === dish.id) el('reason').textContent = original;
+    }, 2000);
     return;
   }
   // 排序已在加载时算定，这道菜本轮仍留在轮播里；静音下次加载才生效。
