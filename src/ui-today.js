@@ -1,6 +1,6 @@
 import { SLOT_LABELS, SLOTS } from './config.js';
 import { slotFromTime, localDateKey } from './dates.js';
-import { currentPick, pendingFeedback, reduceObservations } from './observations.js';
+import { currentPick, feedbackCandidate, pendingFeedback, reduceObservations } from './observations.js';
 import { rankCandidates } from './recommender.js';
 import { loadAll, appendEvent, setHygiene } from './store.js';
 import { setShopLink, copyText } from './deeplink.js';
@@ -24,7 +24,7 @@ function showFailure(err) {
 
 // ranked 是这一顿的完整候选列表，页面加载时算定，浏览期间不重算 ——
 // 否则划着划着顺序会变。index 是当前停在第几道。
-let state = { slot: null, dish: null, shop: null, ranked: [], index: 0, shops: [], recordedDishId: null };
+let state = { slot: null, dateKey: null, dish: null, shop: null, ranked: [], index: 0, shops: [], recordedDishId: null };
 
 const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '没吃成' };
 
@@ -34,9 +34,8 @@ const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '�
  *
  * 本地存储读取失败时不该拦住主卡片渲染：吞掉错误、跳过浮层即可。
  */
-async function renderFeedback() {
+async function renderFeedback(now = Date.now()) {
   try {
-    const now = Date.now();
     const slot = resolveSlot(now);
     const { shops, dishes, events } = await loadAll();
 
@@ -169,16 +168,17 @@ function step(delta) {
   showAt((((state.index + delta) % n) + n) % n);
 }
 
-async function render() {
+async function render(now = Date.now()) {
   try {
-    const now = Date.now();
     const slot = resolveSlot(now);
     const { shops, dishes, events } = await loadAll();
     const nowKey = localDateKey(now);
 
     const pick = currentPick(events, slot, nowKey);
 
-    const asking = pendingFeedback(reduceObservations(events), now, slot);
+    // 用 feedbackCandidate 而不是 pendingFeedback：推迟期间浮层不弹，
+    // 但刚下单还没评分的那道菜同样不该排在开场位（spec 2026-09-13 §4.4）。
+    const asking = feedbackCandidate(reduceObservations(events), now, slot);
     const ranked = rankCandidates({ dishes, shops, events, slot, now });
 
     if (ranked.length === 0) {
@@ -211,7 +211,7 @@ async function render() {
         index = 1;
       }
       await appendEvent({
-        slot, dishId: ranked[index].dish.id,
+        slot, dateKey: nowKey, dishId: ranked[index].dish.id,
         type: 'recommended', value: ranked[index].reason,
       });
     }
@@ -220,8 +220,10 @@ async function render() {
     // 按钮和手势里调的，拿不到 render() 的局部变量。
     // recordedDishId 记的是这一顿已经写进事件流的那道菜 ——「去下单」
     // 靠它判断要不要补写，省掉一次多余的 loadAll()。
+    // dateKey 与 slot 一起定格在渲染这一刻：之后在这张卡片上下单，
+    // 哪怕已经过了零点，事件也属于这一顿。
     state = {
-      slot, dish: null, shop: null, ranked, index, shops,
+      slot, dateKey: nowKey, dish: null, shop: null, ranked, index, shops,
       recordedDishId: ranked[index].dish.id,
     };
     showAt(index);
@@ -237,14 +239,14 @@ async function render() {
  * 入参是点击那一刻的 state 快照，不读模块变量：这个函数在导航期间才跑完，
  * 期间用户可能已经划到别的菜上了。
  */
-async function recordOrder({ slot, dish, ranked, index, recordedDishId }) {
+async function recordOrder({ slot, dateKey, dish, ranked, index, recordedDishId }) {
   // 用户可能浏览到了别的菜上。这一顿的观察值应当落在他真正下单的那道，
   // 所以先补一条 recommended —— 归约那边只认最后一条。
   // 用 recordedDishId 判断，不必再读一次库。
   if (recordedDishId !== dish.id) {
     try {
       await appendEvent({
-        slot, dishId: dish.id, type: 'recommended', value: ranked[index].reason,
+        slot, dateKey, dishId: dish.id, type: 'recommended', value: ranked[index].reason,
       });
       // 只有当用户还停在这道菜上时才更新 —— 否则会把划走之后的状态写脏。
       if (state.dish?.id === dish.id) state = { ...state, recordedDishId: dish.id };
@@ -254,7 +256,7 @@ async function recordOrder({ slot, dish, ranked, index, recordedDishId }) {
     }
   }
   try {
-    await appendEvent({ slot, dishId: dish.id, type: 'clicked' });
+    await appendEvent({ slot, dateKey, dishId: dish.id, type: 'clicked' });
   } catch (err) {
     // 记录失败不该拦住下单 —— 日志是记账，不是门槛。
     console.error('记录「去下单」事件失败', err);
@@ -344,5 +346,8 @@ el('retry').addEventListener('click', () => {
   render();
 });
 
-await renderFeedback();
-await render();
+// 启动时只读一次时钟：两者各读一次的话，恰好跨过饭点边界时
+// 会一个按早餐算、一个按午餐算。评分后重渲染与「重试」照旧各取当下时刻。
+const startedAt = Date.now();
+await renderFeedback(startedAt);
+await render(startedAt);

@@ -93,9 +93,11 @@ export async function setHygiene(shopId, hygiene) {
  * 哪一条观察值。不传就不写这个字段 —— 旧事件与导入的快照没有它，归约那边
  * 会退回启发式，因此不需要任何迁移。
  */
-export async function appendEvent({ slot, dishId, type, value = null, targetTs = null }) {
+export async function appendEvent({ slot, dishId, type, value = null, targetTs = null, dateKey = null }) {
   const event = { id: newId(), ts: Date.now(), slot, dishId, type, value };
   if (targetTs != null) event.targetTs = targetTs;
+  // 这条事件属于哪天的那一顿。由页面渲染时记下，不能从 ts 推 —— 写入时刻可能已跨过零点。
+  if (dateKey != null) event.dateKey = dateKey;
   await run('events', 'readwrite', (s) => s.add(event));
   return event;
 }
