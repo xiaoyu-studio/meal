@@ -140,6 +140,9 @@
 
 ## 6. 归约规则变更（改写原 spec §6.2）
 
+> **已于 2026-09-13 修订**，见 `2026-09-13-meal-identity-and-feedback-timing-design.md` §3：
+> 分组日期优先取事件自带的 `dateKey`，`clicked` 带 `dateKey` 时精确挂到那一顿。以下原文保留。
+
 两处改动。
 
 ### 6.1 一顿只认最后一条推荐
