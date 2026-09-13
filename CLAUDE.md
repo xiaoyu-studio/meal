@@ -59,7 +59,7 @@ node --test                    # 全部测试
 python -m http.server 8000     # 本地预览；ES modules 无法从 file:// 加载
 ```
 
-`src/store.js` 与 `src/ui-*.js` **没有自动化测试**：Node 没有 `indexedDB`，而引入 `fake-indexeddb` 会破坏零依赖约束。这条线是有意画在这里的，覆盖它们的是 `README.md` 里的真机验收清单（尚未执行）。
+`src/store.js` 与 `src/ui-*.js` **没有自动化测试**：Node 没有 `indexedDB`，而引入 `fake-indexeddb` 会破坏零依赖约束。这条线是有意画在这里的，覆盖它们的是 `README.md` 里的真机验收清单（2026-09-13 完成，19/20）。改了 UI 就按清单里「手机宽度布局」那条的规矩重验。
 
 ## 协作偏好
 

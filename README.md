@@ -25,10 +25,12 @@
 这是一个纯静态站点，零构建步骤，直接推到 GitHub Pages 即可：
 
 1. 把仓库推到 GitHub，例如 `xiaoyu-studio/meal`
-2. 仓库 Settings → Pages，把来源设为 `main` 分支根目录
+2. 打开**仓库自己的** Pages 设置页 `https://github.com/xiaoyu-studio/meal/settings/pages`，
+   把 Branch 设为 `main` / `(root)`。注意别进成账号设置里的 Pages 页 ——
+   那一页只有「Verified domains」，管的是自定义域名，改不了发布分支
 3. 几分钟后访问 `https://xiaoyu-studio.github.io/meal/`
 
-当前开发在 `feat/v1-implementation` 分支上进行；何时合并到 `main` 并推送到远程，
+2026-09-13 起线上发布的是 `main`。何时把改动合并到 `main` 并推送到远程，
 由你自己决定和执行。
 
 ### 2. 添加到主屏幕（必做）
