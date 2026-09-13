@@ -1,6 +1,8 @@
 import { CONFIG, EATEN_RATINGS } from './config.js';
 import { localDateKey } from './dates.js';
 
+const MINUTE_MS = 60 * 1000;
+
 /**
  * 把原始事件流压成观察值：一条观察值 = 一顿饭里的一道菜。
  *
@@ -129,6 +131,11 @@ export function reduceObservations(events) {
       : null;
     const clicked = group.events.find((e) => e.type === 'clicked');
 
+    // 推迟补问要从下单那一刻起算；观察值的 ts 是推荐时刻，不是下单时刻。
+    const clickedTs = group.events
+      .filter((e) => e.type === 'clicked')
+      .reduce((max, e) => (max === null || e.ts > max ? e.ts : max), null);
+
     let value;
     let source;
     if (rated) {
@@ -154,6 +161,7 @@ export function reduceObservations(events) {
       source,
       ratedValue: rated ? rated.value : null,
       eaten: rated ? EATEN_RATINGS.includes(rated.value) : false,
+      clickedTs,
     });
   }
 
@@ -204,18 +212,59 @@ export function buildMutedIndex(events) {
 }
 
 /**
- * 下次打开时该补问哪一顿。每次最多返回一条 —— 积压再多也只问最近那顿，
- * 避免一次弹出一串问题。
+ * 该补问哪一顿 —— 不管推迟时长到没到。
+ *
+ * 优先挑「点过下单、还没评分、又不是当前这顿」里最近的一顿，且只看比最近
+ * 一顿已评分更晚的：更早的积压不追问。没有这样的一顿，才退回旧规则 ——
+ * 看最近一条观察值。
+ *
+ * 为什么优先下过单的：边界前下单、边界后再打开时，页面会为新饭点写一条
+ * 没点过的推荐。只看最近一条的话，真正吃了的那顿就被它挡住，永远问不到。
+ *
+ * render() 的守卫（被补问的菜不排开场位）用这个而不是 pendingFeedback：
+ * 推迟期间不补问，但刚下单的那道菜同样不该又被端上来。
  */
-export function pendingFeedback(observations, nowTs, slot) {
+export function feedbackCandidate(observations, nowTs, slot) {
   if (observations.length === 0) return null;
 
-  const latest = observations.reduce((a, b) => (b.ts > a.ts ? b : a));
   const nowKey = localDateKey(nowTs);
+  const isCurrent = (o) => o.dateKey === nowKey && o.slot === slot;
 
-  if (latest.dateKey === nowKey && latest.slot === slot) return null;
+  let lastRatedTs = -Infinity;
+  for (const o of observations) {
+    if (o.source === 'rated' && o.ts > lastRatedTs) lastRatedTs = o.ts;
+  }
+
+  let candidate = null;
+  for (const o of observations) {
+    if (o.source !== 'clicked' || isCurrent(o) || o.ts <= lastRatedTs) continue;
+    if (candidate === null || o.ts > candidate.ts) candidate = o;
+  }
+  if (candidate) return candidate;
+
+  const latest = observations.reduce((a, b) => (b.ts > a.ts ? b : a));
+  if (isCurrent(latest)) return null;
   if (latest.source === 'rated') return null;
   return latest;
+}
+
+/**
+ * 下次打开时该补问哪一顿。每次最多返回一条。
+ *
+ * 下过单的那顿要等 FEEDBACK_DELAY_MINUTES 才问 —— 外卖从下单到吃完要一阵子，
+ * 刚下单就问只能逼人随手答个「没吃成」。推迟期间返回 null，**不拿别的记录
+ * 顶上**：若改问一顿没下单的，用户随手答了，它就成了最近一顿已评分，
+ * 真正下过单的那顿因为比它早而被排除，从此问不到。
+ */
+export function pendingFeedback(observations, nowTs, slot) {
+  const c = feedbackCandidate(observations, nowTs, slot);
+  if (c === null) return null;
+  if (c.source === 'clicked') {
+    // 手工构造的观察值（现有测试里就有）可能没有 clickedTs，退回推荐时刻。
+    const clickedAt = c.clickedTs ?? c.ts;
+    if (nowTs - clickedAt < CONFIG.FEEDBACK_DELAY_MINUTES * MINUTE_MS) return null;
+  }
+  return c;
 }
 
 /**

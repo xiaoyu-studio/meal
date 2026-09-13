@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reduceObservations, buildEatenIndex, buildMutedIndex, pendingFeedback, currentPick } from '../src/observations.js';
+import { reduceObservations, buildEatenIndex, buildMutedIndex, pendingFeedback, feedbackCandidate, currentPick } from '../src/observations.js';
+import { CONFIG } from '../src/config.js';
 
 const at = (dayOffset, hour) =>
   new Date(2026, 7, 22 + dayOffset, hour, 0).getTime();
@@ -458,4 +459,95 @@ test('带 dateKey 的 clicked 落到 dateKey 指定的那一组，即使启发�
     obs.map((o) => [o.dateKey, o.source]),
     [['2026-09-11', 'clicked'], ['2026-09-12', 'none']],
   );
+});
+
+// ---- 2026-09-13：补问时机（spec 2026-09-13 §4）----
+
+test('观察值带 clickedTs：组内最后一次点下单的时刻，没点过为 null', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'd1', late(11, 12, 0)),
+    ev('clicked', 'd1', late(11, 12, 3)),
+    ev('clicked', 'd1', late(11, 12, 7)),
+    ev('recommended', 'd2', late(11, 19, 0), 'dinner'),
+  ]);
+  assert.equal(obs[0].clickedTs, late(11, 12, 7));
+  assert.equal(obs[1].clickedTs, null);
+});
+
+const DELAY_MS = CONFIG.FEEDBACK_DELAY_MINUTES * 60 * 1000;
+
+// 手工构造观察值；dateKey 与 ts 同在本地 2026-09-d
+const meal = (dishId, d, h, m, slot, source, clickedTs = null) => ({
+  dishId,
+  dateKey: `2026-09-${String(d).padStart(2, '0')}`,
+  slot,
+  ts: late(d, h, m),
+  value: source === 'none' ? null : 0.5,
+  source,
+  ratedValue: source === 'rated' ? 'ok' : null,
+  eaten: source === 'rated',
+  clickedTs,
+});
+
+test('下单才 10 分钟、已换饭点：不补问，但 feedbackCandidate 仍能挑出它', () => {
+  const observations = [meal('burger', 11, 10, 25, 'breakfast', 'clicked', late(11, 10, 26))];
+  const now = late(11, 10, 36);
+  assert.equal(pendingFeedback(observations, now, 'lunch'), null);
+  assert.equal(feedbackCandidate(observations, now, 'lunch').dishId, 'burger');
+});
+
+test('离下单恰好满推迟时长时补问，差 1 毫秒则不问', () => {
+  const clickedAt = late(11, 10, 26);
+  const observations = [meal('burger', 11, 10, 25, 'breakfast', 'clicked', clickedAt)];
+  assert.equal(pendingFeedback(observations, clickedAt + DELAY_MS, 'lunch').dishId, 'burger');
+  assert.equal(pendingFeedback(observations, clickedAt + DELAY_MS - 1, 'lunch'), null);
+});
+
+test('边界前下单的那顿，不会被之后一条没点过的推荐挡住', () => {
+  const observations = [
+    meal('burger', 11, 10, 25, 'breakfast', 'clicked', late(11, 10, 26)),
+    meal('noodle', 11, 10, 35, 'lunch', 'none'), // 10:35 打开时为午餐写下的，没点
+  ];
+  assert.equal(pendingFeedback(observations, late(11, 12, 30), 'lunch').dishId, 'burger');
+  assert.equal(pendingFeedback(observations, late(11, 18, 0), 'dinner').dishId, 'burger');
+});
+
+test('推迟期间不拿更新的、没点过的记录顶上', () => {
+  // 早餐那顿的卡片一直开着，17:50 才点下单；中间另有一条没点过的午餐记录。
+  // 若推迟期间改问午餐，用户随手一答，早餐就因早于「最近已评分」而永远问不到。
+  const observations = [
+    meal('burger', 11, 10, 25, 'breakfast', 'clicked', late(11, 17, 50)),
+    meal('rice', 11, 12, 0, 'lunch', 'none'),
+  ];
+  const now = late(11, 18, 0);
+  assert.equal(pendingFeedback(observations, now, 'dinner'), null);
+  assert.equal(feedbackCandidate(observations, now, 'dinner').dishId, 'burger');
+});
+
+test('早于最近一顿已评分的下单记录不算候选，退回旧规则', () => {
+  // 在旧代码上本就通过；防的是漏掉「晚于最近已评分」限制的错误实现 ——
+  // 那样会把两天前的 burger 翻出来追问（spec §6.1 第 10 条）。
+  const observations = [
+    meal('burger', 9, 12, 0, 'lunch', 'clicked', late(9, 12, 1)),
+    meal('soup', 10, 19, 0, 'dinner', 'rated'),
+    meal('rice', 11, 12, 0, 'lunch', 'none'),
+  ];
+  assert.equal(pendingFeedback(observations, late(11, 19, 0), 'dinner').dishId, 'rice');
+});
+
+test('当前这顿下过单也不算候选；更早一顿下过单的照样问', () => {
+  const observations = [
+    meal('burger', 11, 8, 0, 'breakfast', 'clicked', late(11, 8, 1)),
+    meal('noodle', 11, 12, 0, 'lunch', 'clicked', late(11, 12, 5)),
+  ];
+  assert.equal(pendingFeedback(observations, late(11, 14, 30), 'lunch').dishId, 'burger');
+});
+
+test('连着下两顿：先问早餐，评完再问午餐', () => {
+  const breakfast = meal('burger', 11, 10, 25, 'breakfast', 'clicked', late(11, 10, 26));
+  const lunch = meal('noodle', 11, 11, 0, 'lunch', 'clicked', late(11, 11, 1));
+  assert.equal(pendingFeedback([breakfast, lunch], late(11, 13, 0), 'lunch').dishId, 'burger');
+
+  const rated = { ...breakfast, source: 'rated', ratedValue: 'ok', eaten: true };
+  assert.equal(pendingFeedback([rated, lunch], late(11, 15, 30), 'dinner').dishId, 'noodle');
 });
