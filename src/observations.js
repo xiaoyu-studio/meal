@@ -7,9 +7,11 @@ const MINUTE_MS = 60 * 1000;
  * 把原始事件流压成观察值：一条观察值 = 一顿饭里的一道菜。
  *
  * 两步处理：
- * Pass 1: 从 recommended 事件构建规范组（分组键：dateKey|slot|dishId）
- * Pass 2: 把其他事件附加到目标组 —— 事件带 targetTs 时精确匹配 ts 相同的那组，
- *         否则退回启发式：最近的（ts 最大但 <= event.ts）匹配组
+ * Pass 1: 从 recommended 事件构建规范组（分组键：dateKey|slot|dishId；
+ *         dateKey 优先取事件自带的，没有才按写入时刻推算）
+ * Pass 2: 把其他事件附加到目标组 —— 带 targetTs 时精确匹配 ts 相同的那组；
+ *         带 dateKey 时精确匹配 dateKey|slot|dishId 那组；
+ *         都没有或找不到时退回启发式：最近的（ts 最大但 <= event.ts）匹配组
  *
  * 这样既能保留跨天历史，又能处理后序事件（例如评分可能在第二天）。
  */

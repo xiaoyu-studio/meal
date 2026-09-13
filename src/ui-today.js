@@ -29,8 +29,9 @@ let state = { slot: null, dateKey: null, dish: null, shop: null, ranked: [], ind
 const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '没吃成' };
 
 /**
- * 渲染补问上一顿的浮层。已评过、或就是当前这顿的，都不问——
- * 这些跳过规则全在 pendingFeedback 里，这里只负责渲染它返回的结果。
+ * 渲染补问上一顿的浮层。已评过、就是当前这顿、或下单还没满推迟时长的，都不问——
+ * 挑哪一顿在 feedbackCandidate 里，到没到期在 pendingFeedback 里；
+ * 这里只负责渲染 pendingFeedback 返回的结果。
  *
  * 本地存储读取失败时不该拦住主卡片渲染：吞掉错误、跳过浮层即可。
  */
@@ -178,6 +179,8 @@ async function render(now = Date.now()) {
 
     // 用 feedbackCandidate 而不是 pendingFeedback：推迟期间浮层不弹，
     // 但刚下单还没评分的那道菜同样不该排在开场位（spec 2026-09-13 §4.4）。
+    // 两者挑的是同一顿 —— 同样排除当前这顿、同样只看晚于最近已评分的 ——
+    // 区别只在 feedbackCandidate 不看推迟时长到没到。
     const asking = feedbackCandidate(reduceObservations(events), now, slot);
     const ranked = rankCandidates({ dishes, shops, events, slot, now });
 
