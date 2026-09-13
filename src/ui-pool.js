@@ -147,7 +147,9 @@ async function render() {
         // 渲染已存的链接同样要过协议白名单 —— 这个检查是 Task 15 才加的，
         // 早先存进库里的坏数据不能靠"以后不会再存进去"就当没事。
         const linkHtml = isSafeLink(shop.link)
-          ? `<a href="${esc(shop.link)}">跳转链接</a>`
+          // class="link" 跟同一行的「链接失效了？」「删店」保持一致 —— 不加的话
+          // 它是浏览器默认的亮蓝色，在这套暖色调里很扎眼。
+          ? `<a class="link" href="${esc(shop.link)}">跳转链接</a>`
           : `<span class="shop-blocked">链接无效，请点"链接失效了？"重新粘贴</span>`;
 
         return `
