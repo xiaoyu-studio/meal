@@ -410,3 +410,52 @@ test('buildMutedIndex 取每道菜最近一次 muted 的日期', () => {
   assert.equal(idx.get('d2'), '2026-08-23');
   assert.equal(idx.get('d3'), undefined);
 });
+
+// ---- 2026-09-13：事件自带 dateKey（spec 2026-09-13 §3）----
+
+const late = (d, h, m) => new Date(2026, 8, d, h, m).getTime(); // 本地 2026-09-d h:m
+
+test('带 dateKey 的 recommended 按 dateKey 分组，而不是写入时刻', () => {
+  // 23:55 打开、00:05 才补写：写入时刻已是 9/12，但这顿属于 9/11
+  const obs = reduceObservations([
+    { ...ev('recommended', 'B', late(12, 0, 5), 'dinner'), dateKey: '2026-09-11' },
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dateKey, '2026-09-11');
+});
+
+test('跨零点下单：只留下前一天那顿，且落在下单的那道菜上', () => {
+  const events = [
+    { ...ev('recommended', 'A', late(11, 23, 55), 'dinner', '还没试过，试试看'), dateKey: '2026-09-11' },
+    { ...ev('recommended', 'B', late(12, 0, 5), 'dinner', '同类里最便宜'), dateKey: '2026-09-11' },
+    { ...ev('clicked', 'B', late(12, 0, 5) + 1000, 'dinner'), dateKey: '2026-09-11' },
+  ];
+  assert.deepEqual(
+    reduceObservations(events).map((o) => [o.dateKey, o.slot, o.dishId, o.source]),
+    [['2026-09-11', 'dinner', 'B', 'clicked']],
+  );
+});
+
+test('currentPick 认事件自带的 dateKey：跨零点下单不会预先定下第二天那顿', () => {
+  const events = [
+    { ...ev('recommended', 'A', late(11, 23, 55), 'dinner', '还没试过，试试看'), dateKey: '2026-09-11' },
+    { ...ev('recommended', 'B', late(12, 0, 5), 'dinner', '同类里最便宜'), dateKey: '2026-09-11' },
+  ];
+  assert.equal(currentPick(events, 'dinner', '2026-09-12').activeDishId, null);
+  assert.equal(currentPick(events, 'dinner', '2026-09-11').activeDishId, 'B');
+});
+
+test('带 dateKey 的 clicked 落到 dateKey 指定的那一组，即使启发式会挑另一组', () => {
+  const obs = reduceObservations([
+    // 9/11 晚餐那顿，00:05 补写
+    { ...ev('recommended', 'B', late(12, 0, 5), 'dinner'), dateKey: '2026-09-11' },
+    // 另一组：没有 dateKey 的老事件，按写入时刻归到 9/12，且更接近点击时刻
+    ev('recommended', 'B', late(12, 0, 10), 'dinner'),
+    // 点击属于 9/11 那顿；「ts 最大且 <= 点击时刻」的启发式会挑 00:10 那组
+    { ...ev('clicked', 'B', late(12, 0, 15), 'dinner'), dateKey: '2026-09-11' },
+  ]);
+  assert.deepEqual(
+    obs.map((o) => [o.dateKey, o.source]),
+    [['2026-09-11', 'clicked'], ['2026-09-12', 'none']],
+  );
+});

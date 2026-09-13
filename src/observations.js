@@ -18,7 +18,10 @@ export function reduceObservations(events) {
 
   for (const e of events) {
     if (e.type === 'recommended') {
-      const dateKey = localDateKey(e.ts);
+      // 事件自带 dateKey 时以它为准：它记的是「这一顿」属于哪天，
+      // 而写入时刻可能已经跨过零点（23:55 打开、00:05 才点下单）。
+      // 老事件和导入的旧快照没有这个字段，退回按写入时刻推算。
+      const dateKey = e.dateKey ?? localDateKey(e.ts);
       const key = `${dateKey}|${e.slot}|${e.dishId}`;
 
       if (!groups.has(key)) {
@@ -79,7 +82,13 @@ export function reduceObservations(events) {
       targetGroup = candidates.find((g) => g.ts === e.targetTs) ?? null;
     }
 
-    // 没有 targetTs（旧事件、导入的快照），或它指向的组已不存在时，
+    // clicked 带着页面渲染时记下的 dateKey，直接落到那一顿 ——
+    // 不靠写入先后去猜：跨零点时，启发式可能挂到另一组上。
+    if (!targetGroup && e.dateKey != null) {
+      targetGroup = groups.get(`${e.dateKey}|${e.slot}|${e.dishId}`) ?? null;
+    }
+
+    // 既没有 targetTs 也没有 dateKey（旧事件、导入的快照），或指向的组已不存在时，
     // 退回原启发式：找到满足 group.ts <= e.ts 的最大 ts 的组。
     if (!targetGroup) {
       for (const group of candidates) {
@@ -221,7 +230,8 @@ export function currentPick(events, slot, nowKey) {
   for (const e of events) {
     if (e.type !== 'recommended') continue;
     if (e.slot !== slot) continue;
-    if (localDateKey(e.ts) !== nowKey) continue;
+    // 同 reduceObservations：优先认事件自带的 dateKey。
+    if ((e.dateKey ?? localDateKey(e.ts)) !== nowKey) continue;
     if (latest === null || e.ts > latest.ts) latest = e;
   }
 
