@@ -605,6 +605,22 @@ test('只有取消没有静音 → 不在静音索引里', () => {
   assert.equal(idx.has('d1'), false);
 });
 
+test('同一天先静音、几小时后取消 → 已取消（先后比 ts 不比日期）', () => {
+  const idx = buildMutedIndex([
+    ev('muted', 'd1', at(0, 10)),
+    ev('unmuted', 'd1', at(0, 15), null),
+  ]);
+  assert.equal(idx.has('d1'), false);
+});
+
+test('同一天先取消、几小时后又静音 → 静音有效（按日期比会误判成已取消）', () => {
+  const idx = buildMutedIndex([
+    ev('unmuted', 'd1', at(0, 10), null),
+    ev('muted', 'd1', at(0, 15)),
+  ]);
+  assert.equal(idx.get('d1'), '2026-08-22');
+});
+
 test('slot 为 null 的 unmuted 不影响 reduceObservations', () => {
   const base = [
     ev('recommended', 'd1', at(0, 12)),
