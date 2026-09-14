@@ -134,6 +134,7 @@
 | `recommended` | **string（推荐理由）** | 原为 `null`。§5.3 的 `value` 本就允许字符串，无需改类型定义 |
 | `swapped` | — | **不再写入**。归约忽略；类型定义保留以便读懂历史数据 |
 | `muted` | `null` | **新增**，按「别再推这个」时写入 |
+| `unmuted` | `null` | **2026-09-14 新增**，候选池点「取消」时写入，`slot` 为 `null`。见 `2026-09-14-unmute-design.md` |
 | `clicked` / `rated` / `paid` / `sick` | 不变 | |
 
 不需要数据迁移：事件日志只追加不修改，旧事件缺少新语义时由归约规则兜底。
@@ -188,6 +189,9 @@ mute = MUTE_FLOOR + (1 - MUTE_FLOOR) · (1 - e^(-d / MUTE_TAU_DAYS))
 - `d = 0` 时取 `MUTE_FLOOR`；`d → ∞` 时趋近 1
 - 从无 `muted` 事件的菜，`mute = 1`
 - 默认 `MUTE_FLOOR = 0.05`，`MUTE_TAU_DAYS = 14`
+
+> 2026-09-14 修订：「最近一次 `muted`」之后若有 `ts` 不小于它的 `unmuted`，该菜视为从未静音（`mute = 1`）。
+> 见 `2026-09-14-unmute-design.md` §3.2。
 
 ### 7.3 最终评分（改写原 spec §6.6）
 

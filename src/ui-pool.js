@@ -5,7 +5,7 @@ import { snapshotFilename } from './snapshot.js';
 import { isSafeLink } from './deeplink.js';
 import {
   loadAll, putShop, putDish, deleteShop, deleteDish, setHygiene,
-  newId, exportSnapshot, importSnapshot,
+  newId, exportSnapshot, importSnapshot, appendEvent,
 } from './store.js';
 
 const el = (id) => document.getElementById(id);
@@ -130,8 +130,11 @@ async function render() {
             // 所以干脆写成独占一行（CSS 里 display: block），不要用「・」当
             // 行内分隔符：一换行那个点就吊在行首，像个没擦掉的字符。
             const mutedKey = muted.get(d.id);
+            // 「取消」挨着它改的那个状态放，不放右栏：右栏是 nowrap，
+            // 再塞一个按钮会把菜名挤没，而且跟「删」挨着容易点错（spec 2026-09-14 §4.1）。
             const mutedHtml = mutedKey
-              ? `<span class="dish-muted">已静音 · ${esc(mutedKey.slice(5))}</span>`
+              ? `<span class="dish-muted">已静音 · ${esc(mutedKey.slice(5))}` +
+                `<button class="link" data-unmute-dish="${esc(d.id)}" type="button">取消</button></span>`
               : '';
             return `
               <div class="dish-row">
@@ -293,6 +296,19 @@ el('shops').addEventListener('click', async (e) => {
   if (!button) return;
 
   try {
+    // 不弹确认框：「删」要确认是因为不可逆；取消静音点错了，
+    // 下次划到这道菜再按一次「别再推这个」就回来了（spec 2026-09-14 §2.1）。
+    if (button.dataset.unmuteDish) {
+      const dishId = button.dataset.unmuteDish;
+      const { dishes } = await loadAll();
+      const name = dishes.find((d) => d.id === dishId)?.name;
+      // slot 写 null：候选池没有「当前饭点」，也让归约 Pass 2 挂不到任何一顿上。
+      await appendEvent({ slot: null, dishId, type: 'unmuted' });
+      await render();
+      showToast(name ? `已取消静音「${name}」` : '已取消静音');
+      return;
+    }
+
     if (button.dataset.delDish) {
       if (confirm('删掉这道菜？历史记录会保留。')) {
         const { dishes } = await loadAll();
