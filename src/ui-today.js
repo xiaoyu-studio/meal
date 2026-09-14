@@ -74,7 +74,9 @@ async function renderFeedback(now = Date.now()) {
 
     const close = () => { overlay.hidden = true; overlay.innerHTML = ''; };
 
-    overlay.addEventListener('click', async (e) => {
+    // 用 onclick 赋值而不是 addEventListener：回到前台时 renderFeedback 可能再跑一遍，
+    // 叠加的监听器会让一次点击写两条 rated，旧的那条还指向上一次问的那一顿。
+    overlay.onclick = async (e) => {
       const button = e.target.closest('button');
       if (!button) return;
 
@@ -136,7 +138,7 @@ async function renderFeedback(now = Date.now()) {
         console.error('记录反馈失败', err);
         close();
       }
-    });
+    };
   } catch (err) {
     // 读取本地存储失败时跳过浮层即可，不能连累主卡片渲染。
     console.error('渲染反馈浮层失败', err);
@@ -354,3 +356,27 @@ el('retry').addEventListener('click', () => {
 const startedAt = Date.now();
 await renderFeedback(startedAt);
 await render(startedAt);
+
+// iOS 主屏 App 从后台切回来常常不重新加载页面，卡片会停在切走时那一顿 ——
+// 昨晚的卡片今早点下单，这一单就记到了昨天晚餐上。回到前台时查一次时钟：
+// 日期和饭点都没变就什么都不动（下单往返回来卡片不能变），变了才整页重画。
+// 不在点下单那一刻查：那会把轮播从手指底下重置（spec 2026-09-13 §2.1）。
+let refreshing = false;
+async function refreshIfStale() {
+  if (refreshing || document.visibilityState !== 'visible') return;
+  const now = Date.now();
+  if (localDateKey(now) === state.dateKey && resolveSlot(now) === state.slot) return;
+  refreshing = true;
+  try {
+    // 开着的浮层问的是按旧时刻挑出来的那一顿，先收掉再按新时刻重挑。
+    el('feedback').hidden = true;
+    el('feedback').innerHTML = '';
+    await renderFeedback(now);
+    await render(now);
+  } finally {
+    refreshing = false;
+  }
+}
+
+document.addEventListener('visibilitychange', refreshIfStale);
+window.addEventListener('pageshow', (e) => { if (e.persisted) refreshIfStale(); });
