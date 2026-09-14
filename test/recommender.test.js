@@ -513,3 +513,20 @@ test('推过但毫无动作的菜不会被说成「评价一直不错」', () =>
   const rowA = ranked.find((r) => r.dish.id === 'a');
   assert.equal(rowA.reason, '还没试过，试试看');
 });
+
+test('静音后取消的菜，排序与分数和从没静音过完全相同', () => {
+  const dishes = [
+    { id: 'a', shopId: 's1', name: 'A', refPrice: 10, slots: ['lunch'], tags: [] },
+    { id: 'b', shopId: 's1', name: 'B', refPrice: 20, slots: ['lunch'], tags: [] },
+  ];
+  const shops = [{ id: 's1', name: 'S', hygiene: 'unknown' }];
+  const events = [
+    { id: 'm1', ts: NOW - DAY, slot: 'lunch', dishId: 'a', type: 'muted', value: null },
+    { id: 'u1', ts: NOW - DAY + 60000, slot: null, dishId: 'a', type: 'unmuted', value: null },
+  ];
+  const args = { dishes, shops, slot: 'lunch', now: NOW, random: () => 0.5 };
+  assert.deepEqual(
+    rankCandidates({ ...args, events }),
+    rankCandidates({ ...args, events: [] }),
+  );
+});

@@ -551,3 +551,65 @@ test('连着下两顿：先问早餐，评完再问午餐', () => {
   const rated = { ...breakfast, source: 'rated', ratedValue: 'ok', eaten: true };
   assert.equal(pendingFeedback([rated, lunch], late(11, 15, 30), 'dinner').dishId, 'noodle');
 });
+
+// ---- 2026-09-14：取消静音（spec 2026-09-14 §3.2、§5.1）----
+
+test('静音后取消 → 不在静音索引里', () => {
+  const idx = buildMutedIndex([
+    ev('muted', 'd1', at(0, 12)),
+    ev('unmuted', 'd1', at(4, 12), null),
+  ]);
+  assert.equal(idx.has('d1'), false);
+});
+
+test('静音与取消 ts 相等 → 算已取消', () => {
+  const ts = at(0, 12);
+  const idx = buildMutedIndex([
+    ev('muted', 'd1', ts),
+    ev('unmuted', 'd1', ts, null),
+  ]);
+  assert.equal(idx.has('d1'), false);
+});
+
+test('取消只影响被取消的那道菜', () => {
+  const idx = buildMutedIndex([
+    ev('muted', 'd1', at(0, 12)),
+    ev('muted', 'd2', at(1, 12)),
+    ev('unmuted', 'd1', at(2, 12), null),
+  ]);
+  assert.equal(idx.has('d1'), false);
+  assert.equal(idx.get('d2'), '2026-08-23');
+});
+
+test('取消之后再静音 → 以再静音那天为准', () => {
+  const idx = buildMutedIndex([
+    ev('muted', 'd1', at(0, 12)),
+    ev('unmuted', 'd1', at(4, 12), null),
+    ev('muted', 'd1', at(9, 12)),
+  ]);
+  assert.equal(idx.get('d1'), '2026-08-31');
+});
+
+test('先取消后静音 → 静音有效', () => {
+  const idx = buildMutedIndex([
+    ev('unmuted', 'd1', at(0, 12), null),
+    ev('muted', 'd1', at(4, 12)),
+  ]);
+  assert.equal(idx.get('d1'), '2026-08-26');
+});
+
+test('只有取消没有静音 → 不在静音索引里', () => {
+  const idx = buildMutedIndex([
+    ev('unmuted', 'd1', at(0, 12), null),
+  ]);
+  assert.equal(idx.has('d1'), false);
+});
+
+test('slot 为 null 的 unmuted 不影响 reduceObservations', () => {
+  const base = [
+    ev('recommended', 'd1', at(0, 12)),
+    ev('clicked', 'd1', at(0, 12) + 60000),
+  ];
+  const withUnmute = [...base, ev('unmuted', 'd1', at(0, 13), null)];
+  assert.deepEqual(reduceObservations(withUnmute), reduceObservations(base));
+});

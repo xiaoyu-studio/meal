@@ -198,17 +198,30 @@ export function buildEatenIndex(observations, dishesById) {
 }
 
 /**
- * 每道菜最近一次被按下「别再推这个」的本地日期键。
+ * 每道菜最近一次被按下「别再推这个」、且之后没被取消的本地日期键。
  * 直接从原始事件流取，不经过观察值 —— 静音是对菜的表态，
  * 不属于任何一顿饭。
+ *
+ * 先后比 ts 而不比日期：同一天先静音后取消，日期相同分不出先后
+ * （spec 2026-09-14 §3.2）。ts 相等时算已取消。
  */
 export function buildMutedIndex(events) {
-  const out = new Map();
+  const lastMuted = new Map();   // dishId -> ts
+  const lastUnmuted = new Map(); // dishId -> ts
   for (const e of events) {
-    if (e.type !== 'muted') continue;
-    const key = localDateKey(e.ts);
-    const prev = out.get(e.dishId);
-    if (prev === undefined || key > prev) out.set(e.dishId, key);
+    const latest = e.type === 'muted' ? lastMuted
+      : e.type === 'unmuted' ? lastUnmuted
+      : null;
+    if (!latest) continue;
+    const prev = latest.get(e.dishId);
+    if (prev === undefined || e.ts > prev) latest.set(e.dishId, e.ts);
+  }
+
+  const out = new Map();
+  for (const [dishId, mutedTs] of lastMuted) {
+    const unmutedTs = lastUnmuted.get(dishId);
+    if (unmutedTs !== undefined && unmutedTs >= mutedTs) continue;
+    out.set(dishId, localDateKey(mutedTs));
   }
   return out;
 }
