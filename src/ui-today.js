@@ -35,10 +35,10 @@ const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '�
  *
  * 本地存储读取失败时不该拦住主卡片渲染：吞掉错误、跳过浮层即可。
  */
-async function renderFeedback(now = Date.now()) {
+async function renderFeedback(now = Date.now(), data = null) {
   try {
     const slot = resolveSlot(now);
-    const { shops, dishes, events } = await loadAll();
+    const { shops, dishes, events } = data ?? await loadAll();
 
     // 传进去的是此刻还在候选池的菜：已删的菜那顿问不出口，交给它顺延到上一顿，
     // 否则那顿会一直占着候选位，别的顿也问不到（TODO 第 7 条）。
@@ -174,10 +174,10 @@ function step(delta) {
   showAt((((state.index + delta) % n) + n) % n);
 }
 
-async function render(now = Date.now()) {
+async function render(now = Date.now(), data = null) {
   try {
     const slot = resolveSlot(now);
-    const { shops, dishes, events } = await loadAll();
+    const { shops, dishes, events } = data ?? await loadAll();
     const nowKey = localDateKey(now);
 
     const pick = currentPick(events, slot, nowKey);
@@ -363,11 +363,29 @@ el('retry').addEventListener('click', () => {
   render();
 });
 
+/**
+ * 画一整页：浮层 + 卡片。一次渲染只读一遍库，两者看到的必然是同一份数据 ——
+ * 各读各的话中间隔着一次 await，浮层和卡片可能依据两份不同的快照。
+ * 读不出来就是失败态，浮层也不用画了。
+ *
+ * 评分后重渲染与「重试」仍各自调 render()：那时必须重新读库才能看见刚写进去的事件。
+ */
+async function renderAll(now = Date.now()) {
+  let data;
+  try {
+    data = await loadAll();
+  } catch (err) {
+    showFailure(err);
+    return;
+  }
+  await renderFeedback(now, data);
+  await render(now, data);
+}
+
 // 启动时只读一次时钟：两者各读一次的话，恰好跨过饭点边界时
 // 会一个按早餐算、一个按午餐算。评分后重渲染与「重试」照旧各取当下时刻。
 const startedAt = Date.now();
-await renderFeedback(startedAt);
-await render(startedAt);
+await renderAll(startedAt);
 
 // iOS 主屏 App 从后台切回来常常不重新加载页面，卡片会停在切走时那一顿 ——
 // 昨晚的卡片今早点下单，这一单就记到了昨天晚餐上。回到前台时查一次时钟：
@@ -383,8 +401,7 @@ async function refreshIfStale() {
     // 开着的浮层问的是按旧时刻挑出来的那一顿，先收掉再按新时刻重挑。
     el('feedback').hidden = true;
     el('feedback').innerHTML = '';
-    await renderFeedback(now);
-    await render(now);
+    await renderAll(now);
   } finally {
     refreshing = false;
   }
