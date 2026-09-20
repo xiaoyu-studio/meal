@@ -417,6 +417,22 @@ GitHub Pages，仓库路径 `/meal/`。需包含 `manifest.json`（`display: sta
 
 `store` 必须测**导出 → 导入的往返一致性**（深比较相等）。这是用户唯一的备份手段，必须可靠。
 
+> **2026-09-20 补记：这一句与 §3.4 的零依赖约束相抵，取舍如下。**
+>
+> `store.js` 碰 `indexedDB`，Node 里没有这个 API，要自动化测它只能引入 `fake-indexeddb`——
+> 而那会破坏「零运行时依赖、零构建步骤」（§3.4，`package.json` 只允许 `name` / `private` / `type`）。
+> 两者不能同时满足。
+>
+> **决定：保留零依赖，往返一致性改由真机手工验收覆盖** —— `docs/acceptance-checklist.md`
+> 第 6 条「导出 JSON 能存入「文件」App，删掉一家店后再导入，数据完整还原」，2026-09-09 通过。
+> 判据比深比较弱（看的是页面上的店 / 菜数量与被删那家店的复原），但它验的是真实设备上的
+> 真实文件往返，连「文件」App 这一环也一并覆盖了，而 `fake-indexeddb` 验不到这一环。
+>
+> 纯函数那半仍然测：`snapshot.js` 的 `toSnapshot` / `fromSnapshot` 有完整单元测试，
+> 没被覆盖的只剩 `store.js` 里读写 IndexedDB 的那几十行。
+>
+> **要改这个取舍，先改 §3.4**，不要只改这一句。
+
 测试中需注入固定的 `now` 与可替换的随机源，使 `jitter` 在测试下可确定。
 
 ### 9.2 iPhone 手工验收清单
