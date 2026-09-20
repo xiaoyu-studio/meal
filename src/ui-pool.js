@@ -115,7 +115,13 @@ async function render() {
     // 编一个「静音中/已过期」的阈值出来反而是在撒谎。
     const muted = buildMutedIndex(events);
 
+    // 新店排在表单正下方 —— getAll() 按 uuid 主键排，等于随机，加完一家店
+    // 要在列表里找半天。没有 createdAt 的老店（这个字段 2026-09-20 才加）
+    // 一律排在后面，彼此保持原来的相对顺序，所以既有列表的样子不变。
+    const createdAt = (s) => (typeof s.createdAt === 'number' ? s.createdAt : -Infinity);
     el('shops').innerHTML = shops
+      .slice()
+      .sort((a, b) => createdAt(b) - createdAt(a))
       .map((shop) => {
         const rows = dishes
           .filter((d) => d.shopId === shop.id)
@@ -224,12 +230,15 @@ el('shop-form').addEventListener('submit', async (e) => {
       link,
       hygiene: f.get('hygiene'),
       note: '',
+      // 列表靠它把新店排在最前。只在新建时写：putShop 也用于改链接和
+      // 改卫生标记，在那些路径上写时间会把老店挪到顶上去。
+      createdAt: Date.now(),
     });
     msg.textContent = '';
     e.target.reset();
     await render();
-    // 店铺列表的顺序是按主键排的（shops 没有创建时间字段），新店不一定
-    // 出现在表单正下方 —— 不给提示的话，用户会以为没保存上又填一遍。
+    // 新店现在会排在表单正下方（按 createdAt 倒序），但列表长了照样要滚动，
+    // 提示仍然有用：没有它，用户会以为没保存上又填一遍。
     showToast(`已添加「${name}」`);
   } catch (err) {
     console.error('保存店铺失败', err);
