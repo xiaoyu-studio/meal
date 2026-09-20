@@ -86,6 +86,28 @@ function showToast(text) {
   }, 2600);
 }
 
+/**
+ * 让一个元素淡出，等过渡真的跑完再落地 —— 和 toast 收尾同一套写法。
+ * transitionend 不是一定会来：开了「减弱动态效果」时 transition 是 none，
+ * 压根不派发这个事件，所以另配一个兜底定时器，谁先到谁收尾。
+ */
+function fadeOut(node, className) {
+  return new Promise((resolve) => {
+    node.classList.add(className);
+    let settled = false;
+    const done = (e) => {
+      if (e && e.propertyName !== 'opacity') return;
+      if (settled) return;
+      settled = true;
+      node.removeEventListener('transitionend', done);
+      clearTimeout(fallback);
+      resolve();
+    };
+    const fallback = setTimeout(done, 400);
+    node.addEventListener('transitionend', done);
+  });
+}
+
 /** 本地存储读不出来时兜底展示的失败态。 */
 function showFailure(err) {
   console.error('渲染候选池失败', err);
@@ -162,7 +184,7 @@ async function render() {
           : `<span class="shop-blocked">链接无效，请点"链接失效了？"重新粘贴</span>`;
 
         return `
-          <section class="shop-block">
+          <section class="shop-block" data-shop="${esc(shop.id)}">
             <div class="shop-head">
               <p class="shop-title">${esc(shop.name)}</p>
               <span class="shop-meta ${shop.hygiene === 'blocked' ? 'shop-blocked' : ''}">
@@ -333,7 +355,10 @@ el('shops').addEventListener('click', async (e) => {
       if (confirm('删掉这家店？它名下所有菜品也会一并删除。')) {
         const { shops } = await loadAll();
         const name = shops.find((s) => s.id === button.dataset.delShop)?.name;
+        // 先写库再动画：写失败时卡片不该先消失再弹回来，错误走下面的 catch。
         await deleteShop(button.dataset.delShop);
+        const block = button.closest('.shop-block');
+        if (block) await fadeOut(block, 'shop-removing');
         await render();
         showToast(name ? `已删除「${name}」及其菜品` : '已删除');
       }

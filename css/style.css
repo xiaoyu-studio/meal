@@ -252,6 +252,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .toast { transition: none; }
+  .shop-block { transition: none; }
 }
 
 .io-row { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; }
@@ -266,6 +267,13 @@ body {
   border-radius: 1rem;
   padding: 1.25rem;
   margin-bottom: 1rem;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+/* 删店时先淡出再重渲染，否则卡片「啪」一下就没了，看不出删的是哪一张。 */
+.shop-removing {
+  opacity: 0;
+  transform: scale(0.97);
 }
 
 .shop-head { display: flex; justify-content: space-between; align-items: baseline; }
