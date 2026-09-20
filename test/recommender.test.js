@@ -255,7 +255,7 @@ test('total 恒在 (0,1] 区间内', () => {
 });
 
 const base = {
-  hasObservations: true, lastRatedValue: null,
+  hasObservations: true, hasRating: true, lastRatedValue: null,
   isTopTaste: false, isTopValue: false, fDish: 0.5,
 };
 
@@ -529,4 +529,35 @@ test('静音后取消的菜，排序与分数和从没静音过完全相同', ()
     rankCandidates({ ...args, events }),
     rankCandidates({ ...args, events: [] }),
   );
+});
+
+// ---- 2026-09-20：「评价一直不错」要求真的评过分（TODO 第 10 条）----
+
+test('只点过没评过的菜，即使好吃度最高也不说"评价一直不错"', () => {
+  assert.equal(reasonFor({ ...base, hasRating: false, isTopTaste: true }), '换换口味');
+});
+
+test('只点过没评过但久未食用 → 落到"好久没吃了"', () => {
+  assert.equal(
+    reasonFor({ ...base, hasRating: false, isTopTaste: true, fDish: 0.85 }),
+    '好久没吃了',
+  );
+});
+
+test('rankCandidates：只点过下单的菜不会被说成"评价一直不错"', () => {
+  const dishes = [
+    { id: 'a', shopId: 's1', name: 'A', refPrice: 20, slots: ['lunch'], tags: [] },
+    { id: 'b', shopId: 's1', name: 'B', refPrice: 20, slots: ['lunch'], tags: [] },
+  ];
+  const shops = [{ id: 's1', name: 'S', hygiene: 'unknown' }];
+  // A 只点过下单（0.65），B 评过 bad —— A 的好吃度因此最高，但它从没被评价过。
+  const events = [
+    { id: 'r1', ts: NOW - 3 * DAY, slot: 'lunch', dishId: 'a', type: 'recommended', value: null },
+    { id: 'c1', ts: NOW - 3 * DAY + 60000, slot: 'lunch', dishId: 'a', type: 'clicked', value: null },
+    { id: 'r2', ts: NOW - 2 * DAY, slot: 'lunch', dishId: 'b', type: 'recommended', value: null },
+    { id: 'v2', ts: NOW - 1 * DAY, slot: 'lunch', dishId: 'b', type: 'rated', value: 'bad', targetTs: NOW - 2 * DAY },
+  ];
+  const ranked = rankCandidates({ dishes, shops, events, slot: 'lunch', now: NOW, random: () => 0.5 });
+  const rowA = ranked.find((r) => r.dish.id === 'a');
+  assert.notEqual(rowA.reason, '评价一直不错');
 });

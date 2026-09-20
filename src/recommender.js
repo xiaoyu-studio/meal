@@ -121,6 +121,7 @@ export function muteOf({ lastMutedKey, nowKey }) {
  */
 export function reasonFor({
   hasObservations,
+  hasRating = false,
   lastRatedValue,
   isTopTaste,
   isTopValue,
@@ -128,7 +129,10 @@ export function reasonFor({
 }) {
   if (!hasObservations) return '还没试过，试试看';
   if (lastRatedValue === 'good') return '你上次说好吃';
-  if (isTopTaste) return '评价一直不错';
+  // 这句话字面就是在讲评价，所以要求真的评过分。只点过「去下单」的那几顿
+  // 按 IMPLICIT_CLICKED 计入好吃度，足以让一道从没被评价过的菜排到最高 ——
+  // 拿它撑这句话，等于替用户说了一句他没说过的话（TODO 第 10 条，2026-09-20）。
+  if (isTopTaste && hasRating) return '评价一直不错';
   if (isTopValue) return '同类里最便宜';
   if (fDish >= CONFIG.LONG_TIME_FDISH) return '好久没吃了';
   return '换换口味';
@@ -212,6 +216,7 @@ export function rankCandidates({
           // 推了但用户没动作会留下一条不带数值的记录，它不该让「还没试过」
           // 变成「评价一直不错」。
           hasObservations: r.obs.some((o) => o.value !== null && o.value !== undefined),
+          hasRating: r.obs.some((o) => o.source === 'rated'),
           lastRatedValue,
           isTopTaste: r.taste === maxTaste,
           isTopValue: r.value === maxValue,
