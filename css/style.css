@@ -49,10 +49,17 @@ body {
 .reason { margin: 1rem 0 1.5rem; color: var(--accent); }
 .empty-text { margin: 0 0 1.25rem; color: var(--muted); }
 
-.swap {
+/* 两个翻页按钮整行定位在右上角。gap 而不是各自留 margin：
+   375px 下两个四字按钮加间距约 140px，卡片内边距之外还剩一半以上，不会换行。 */
+.swap-row {
   position: absolute;
   top: 1rem;
   right: 1rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.swap {
   background: none;
   border: none;
   color: var(--muted);
