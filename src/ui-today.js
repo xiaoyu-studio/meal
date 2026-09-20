@@ -40,11 +40,14 @@ async function renderFeedback(now = Date.now()) {
     const slot = resolveSlot(now);
     const { shops, dishes, events } = await loadAll();
 
-    const target = pendingFeedback(reduceObservations(events), now, slot);
+    // 传进去的是此刻还在候选池的菜：已删的菜那顿问不出口，交给它顺延到上一顿，
+    // 否则那顿会一直占着候选位，别的顿也问不到（TODO 第 7 条）。
+    const live = new Set(dishes.map((d) => d.id));
+    const target = pendingFeedback(reduceObservations(events), now, slot, live);
     if (!target) return;
 
     const dish = dishes.find((d) => d.id === target.dishId);
-    if (!dish) return; // 菜已从候选池删除，无从问起
+    if (!dish) return; // 兜底：正常情况下 live 已经把这种挑掉了
     const shop = shops.find((s) => s.id === dish.shopId);
 
     const overlay = el('feedback');
@@ -183,7 +186,10 @@ async function render(now = Date.now()) {
     // 但刚下单还没评分的那道菜同样不该排在开场位（spec 2026-09-13 §4.4）。
     // 两者挑的是同一顿 —— 同样排除当前这顿、同样只看晚于最近已评分的 ——
     // 区别只在 feedbackCandidate 不看推迟时长到没到。
-    const asking = feedbackCandidate(reduceObservations(events), now, slot);
+    // live 同 renderFeedback：两处必须挑出同一顿，否则守卫会去躲一道
+    // 根本不会被问到的菜。
+    const live = new Set(dishes.map((d) => d.id));
+    const asking = feedbackCandidate(reduceObservations(events), now, slot, live);
     const ranked = rankCandidates({ dishes, shops, events, slot, now });
 
     if (ranked.length === 0) {

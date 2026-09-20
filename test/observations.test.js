@@ -629,3 +629,54 @@ test('slot 为 null 的 unmuted 不影响 reduceObservations', () => {
   const withUnmute = [...base, ev('unmuted', 'd1', at(0, 13), null)];
   assert.deepEqual(reduceObservations(withUnmute), reduceObservations(base));
 });
+
+// ---- 2026-09-20：已删除的菜不占补问候选 ----
+
+test('下过单没评分的那道菜已被删 → 候选顺延到上一顿还在的', () => {
+  const observations = [
+    meal('gone', 13, 12, 0, 'lunch', 'clicked', late(13, 12, 5)),
+    meal('kept', 12, 18, 0, 'dinner', 'none'),
+  ];
+  const live = new Set(['kept']);
+  const c = feedbackCandidate(observations, late(13, 19, 0), 'dinner', live);
+  assert.equal(c.dishId, 'kept');
+});
+
+test('唯一可问的那顿其菜已被删 → 返回 null，不乱挑', () => {
+  const observations = [meal('gone', 13, 12, 0, 'lunch', 'clicked', late(13, 12, 5))];
+  const live = new Set(['other']);
+  assert.equal(feedbackCandidate(observations, late(13, 19, 0), 'dinner', live), null);
+});
+
+test('删掉的是最近评过分的那道菜 → 「最近已评分」的线不回退', () => {
+  // 09-11 午餐没评分（菜还在）；09-13 午餐已评分，但那道菜被删了。
+  // 若算这条线时漏掉已删菜，09-11 那顿会被翻出来重问。
+  const observations = [
+    meal('kept', 11, 12, 0, 'lunch', 'none'),
+    meal('gone', 13, 12, 0, 'lunch', 'rated'),
+  ];
+  const live = new Set(['kept']);
+  assert.equal(feedbackCandidate(observations, late(13, 19, 0), 'dinner', live), null);
+});
+
+test('不传 liveDishIds 时行为不变', () => {
+  const observations = [
+    meal('gone', 13, 12, 0, 'lunch', 'clicked', late(13, 12, 5)),
+    meal('kept', 12, 18, 0, 'dinner', 'none'),
+  ];
+  const c = feedbackCandidate(observations, late(13, 19, 0), 'dinner');
+  assert.equal(c.dishId, 'gone');
+});
+
+test('pendingFeedback 把 liveDishIds 透传下去', () => {
+  const observations = [
+    meal('gone', 13, 12, 0, 'lunch', 'clicked', late(13, 12, 5)),
+    meal('kept', 12, 18, 0, 'dinner', 'none'),
+  ];
+  const nowTs = late(13, 12, 5) + DELAY_MS;
+  assert.equal(pendingFeedback(observations, nowTs, 'dinner').dishId, 'gone');
+  assert.equal(
+    pendingFeedback(observations, nowTs, 'dinner', new Set(['kept'])).dishId,
+    'kept',
+  );
+});

@@ -238,10 +238,17 @@ export function buildMutedIndex(events) {
  *
  * render() 的守卫（被补问的菜不排开场位）用这个而不是 pendingFeedback：
  * 推迟期间不补问，但刚下单的那道菜同样不该又被端上来。
+ *
+ * liveDishIds 是「此刻还在候选池里的菜」的 id 集合，由页面传入（纯函数读不到库）。
+ * 传了就只挑菜还在的 —— 否则下过单的菜一被删，浮层找不到菜不弹，那顿却一直
+ * 占着候选位，别的顿也问不到。**只用来筛候选，不参与算「最近一顿已评分」**：
+ * 那条线漏掉已删菜就会往回退，把几天前的老记录翻出来重问。
+ * 不传（null）时行为与加这个参数之前完全一致。
  */
-export function feedbackCandidate(observations, nowTs, slot) {
+export function feedbackCandidate(observations, nowTs, slot, liveDishIds = null) {
   if (observations.length === 0) return null;
 
+  const isLive = (o) => liveDishIds === null || liveDishIds.has(o.dishId);
   const nowKey = localDateKey(nowTs);
   const isCurrent = (o) => o.dateKey === nowKey && o.slot === slot;
 
@@ -253,11 +260,19 @@ export function feedbackCandidate(observations, nowTs, slot) {
   let candidate = null;
   for (const o of observations) {
     if (o.source !== 'clicked' || isCurrent(o) || o.ts <= lastRatedTs) continue;
+    if (!isLive(o)) continue;
     if (candidate === null || o.ts > candidate.ts) candidate = o;
   }
   if (candidate) return candidate;
 
-  const latest = observations.reduce((a, b) => (b.ts > a.ts ? b : a));
+  // 退回旧规则时同样只看菜还在的那些；一条都不剩就不问。
+  const askable = observations.filter(isLive);
+  if (askable.length === 0) return null;
+  const latest = askable.reduce((a, b) => (b.ts > a.ts ? b : a));
+  // 早于最近一顿已评分的不追问。不过滤时这条判断不改变任何结果（那时 latest
+  // 就是全局最新的一条）；过滤之后它才要紧：已删菜把那条线撑在后面，
+  // 剩下的老记录不该被翻出来重问。
+  if (latest.ts <= lastRatedTs) return null;
   if (isCurrent(latest)) return null;
   if (latest.source === 'rated') return null;
   return latest;
@@ -271,8 +286,8 @@ export function feedbackCandidate(observations, nowTs, slot) {
  * 顶上**：若改问一顿没下单的，用户随手答了，它就成了最近一顿已评分，
  * 真正下过单的那顿因为比它早而被排除，从此问不到。
  */
-export function pendingFeedback(observations, nowTs, slot) {
-  const c = feedbackCandidate(observations, nowTs, slot);
+export function pendingFeedback(observations, nowTs, slot, liveDishIds = null) {
+  const c = feedbackCandidate(observations, nowTs, slot, liveDishIds);
   if (c === null) return null;
   if (c.source === 'clicked') {
     // 手工构造的观察值（现有测试里就有）可能没有 clickedTs，退回推荐时刻。
