@@ -115,13 +115,24 @@ export function reduceObservations(events) {
   //
   // 比较用 lastRecommendedTs 而非 ts：ts 被「保留最早」的去重语义占用了，
   // 用它比较会在「A → B → 划回 A」时误选 B。
+  //
+  // 但带 rated 的组不能这样丢掉：浮层问的是「上顿的×怎么样」，用户答的就是那道菜，
+  // 评分与菜是绑在一起的一次表态。所以先看谁带评分，都带或都不带时才比推荐时刻。
+  const hasRated = (g) => g.events.some((e) => e.type === 'rated');
   const latestPerMeal = new Map(); // key = dateKey|slot -> group
   for (const group of groups.values()) {
     const mealKey = `${group.dateKey}|${group.slot}`;
     const kept = latestPerMeal.get(mealKey);
-    if (!kept || group.lastRecommendedTs > kept.lastRecommendedTs) {
+    if (!kept) {
       latestPerMeal.set(mealKey, group);
+      continue;
     }
+    const rated = hasRated(group);
+    const keptRated = hasRated(kept);
+    const wins = rated !== keptRated
+      ? rated
+      : group.lastRecommendedTs > kept.lastRecommendedTs;
+    if (wins) latestPerMeal.set(mealKey, group);
   }
 
   // 减缩每个组

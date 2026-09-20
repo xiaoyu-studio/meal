@@ -680,3 +680,40 @@ test('pendingFeedback 把 liveDishIds 透传下去', () => {
     'kept',
   );
 });
+
+// ---- 2026-09-20：一顿里带评分的组不被丢弃（TODO 第 8 条）----
+
+test('同一顿里带 rated 的组优先保留，即使它不是最后一条推荐', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'A', at(0, 11)),
+    ev('rated', 'A', at(0, 13), 'lunch', 'good'),
+    ev('recommended', 'B', at(0, 12)),
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dishId, 'A');
+  assert.equal(obs[0].source, 'rated');
+  assert.equal(obs[0].ratedValue, 'good');
+});
+
+test('两组都带 rated 时，仍取最后一条推荐的那组', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'A', at(0, 11)),
+    { ...ev('rated', 'A', at(0, 13), 'lunch', 'bad'), targetTs: at(0, 11) },
+    ev('recommended', 'B', at(0, 12)),
+    { ...ev('rated', 'B', at(0, 14), 'lunch', 'good'), targetTs: at(0, 12) },
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dishId, 'B');
+  assert.equal(obs[0].ratedValue, 'good');
+});
+
+test('都不带 rated 时照旧取最后一条推荐的那组', () => {
+  const obs = reduceObservations([
+    ev('recommended', 'A', at(0, 11)),
+    ev('recommended', 'B', at(0, 12)),
+    ev('clicked', 'B', at(0, 12) + 60000),
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dishId, 'B');
+  assert.equal(obs[0].source, 'clicked');
+});
