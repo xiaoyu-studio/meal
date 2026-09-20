@@ -105,6 +105,15 @@ dateKey = e.dateKey ?? localDateKey(e.ts)
 
 第 2 层在场景 B 中并非必需（启发式碰巧能找对），但有字段就直接用，才不会再次依赖写入先后。
 
+> **2026-09-20 修订：带 `dateKey` 的事件不再落到第 3 层。** 第 2 层找不到组时直接丢弃这条事件。
+>
+> 原写法在「补写 `recommended` 失败、`clicked` 却落了地」时会退回启发式，把这条 `clicked`
+> 挂到几周前的同菜同饭点组上，凭空给那顿添一个「已下单」（0.65）。事件自己说了属于哪一顿，
+> 就不该再猜。代价是丢掉一次点击信号，那顿成为「推了但没动作」—— 比记到另一顿上轻。
+>
+> 不带 `dateKey` 的老事件与导入的旧快照仍走第 3 层，行为不变；`targetTs` 那一层不动。
+> 真实备份（`meal-2026-09-14.json`，18 条观察值）新旧归约零差异。
+
 **`latestPerMeal`**、腻味系数、「吃过 N 次」都读观察值上的 `dateKey`，随 Pass 1 自动修正，无需单独改动。
 
 **`currentPick(events, slot, nowKey)`**：判断一条 `recommended` 是否属于今天时，同样用 `e.dateKey ?? localDateKey(e.ts)`。

@@ -717,3 +717,35 @@ test('都不带 rated 时照旧取最后一条推荐的那组', () => {
   assert.equal(obs[0].dishId, 'B');
   assert.equal(obs[0].source, 'clicked');
 });
+
+// ---- 2026-09-20：带 dateKey 的事件找不到那组时不再猜（TODO 第 9 条）----
+
+test('带 dateKey 的 clicked 找不到自己那组 → 不挂到几周前的同菜同饭点组上', () => {
+  // 09-01 午餐推过甲菜；09-13 午餐补写推荐失败，只留下一条带 dateKey 的 clicked。
+  const obs = reduceObservations([
+    { ...ev('recommended', 'A', late(1, 12, 0)), dateKey: '2026-09-01' },
+    { ...ev('clicked', 'A', late(13, 12, 30)), dateKey: '2026-09-13' },
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dateKey, '2026-09-01');
+  assert.equal(obs[0].source, 'none', '09-01 那顿不该被标成已下单');
+});
+
+test('不带 dateKey 的老事件照旧走启发式', () => {
+  const obs = reduceObservations([
+    { ...ev('recommended', 'A', late(1, 12, 0)), dateKey: '2026-09-01' },
+    ev('clicked', 'A', late(13, 12, 30)),
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].source, 'clicked');
+});
+
+test('带 dateKey 且那组存在 → 照常挂上去', () => {
+  const obs = reduceObservations([
+    { ...ev('recommended', 'A', late(13, 12, 0)), dateKey: '2026-09-13' },
+    { ...ev('clicked', 'A', late(13, 12, 30)), dateKey: '2026-09-13' },
+  ]);
+  assert.equal(obs.length, 1);
+  assert.equal(obs[0].dateKey, '2026-09-13');
+  assert.equal(obs[0].source, 'clicked');
+});

@@ -92,8 +92,14 @@ export function reduceObservations(events) {
       targetGroup = groups.get(`${e.dateKey}|${e.slot}|${e.dishId}`) ?? null;
     }
 
-    // 既没有 targetTs 也没有 dateKey（旧事件、导入的快照），或指向的组已不存在时，
-    // 退回原启发式：找到满足 group.ts <= e.ts 的最大 ts 的组。
+    // 事件自己说了属于哪一顿，就不再猜：带 dateKey 却找不到那组，说明补写
+    // recommended 失败了（只有 clicked 落了地）。这时退回启发式会把它挂到
+    // 几周前的同菜同饭点组上，凭空给那顿加一个「已下单」——
+    // 丢掉一次点击信号，比记到另一顿上轻（spec 2026-09-13 §3.2 的 2026-09-20 修订）。
+    if (!targetGroup && e.dateKey != null) continue;
+
+    // 既没有 targetTs 也没有 dateKey（旧事件、导入的快照），或 targetTs 指向的组
+    // 已不存在时，退回原启发式：找到满足 group.ts <= e.ts 的最大 ts 的组。
     if (!targetGroup) {
       for (const group of candidates) {
         if (group.ts <= e.ts) {
