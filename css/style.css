@@ -81,17 +81,10 @@ body {
   cursor: pointer;
 }
 
-.pool-link {
-  display: block;
-  margin-top: 2rem;
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
 .overlay {
   position: fixed;
   inset: 0;
+  z-index: 50;   /* 盖过 TabBar（40），低于 toast（100） */
   background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: flex-end;
@@ -229,14 +222,12 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .toast { transition: none; }
   .shop-block { transition: none; }
-  /* 首页便签卡片：装饰性动画全停。跟手拖动不在此列 —— 关掉手势等于关掉
-     一个功能，那不是「减少动效」的意思。按钮按下的位移是操作反馈，也留着。
-     !important 是因为动画声明在文件后面，按源码顺序会盖过这里。 */
-  .note, .polaroid, .stickers span, #prev i, #swap i {
+  /* 首页便签卡片与 TabBar：装饰性动画全停。跟手拖动不在此列 —— 关掉手势
+     等于关掉一个功能，那不是「减少动效」的意思。按钮按下的位移是操作反馈，
+     也留着。!important 是因为动画声明在文件后面，按源码顺序会盖过这里。 */
+  .stack, .polaroid, .stickers span, .swap i, .tab-ico {
     animation: none !important;
   }
-  .note { transform: rotate(-1.6deg); }
-  .polaroid { transform: rotate(9deg); }
   /* 底下那张松手后自己滑到位的过渡也关掉；拖动时跟手浮起不受影响。 */
   .under.moving, .under.moving .tape, .under.moving .polaroid, .under.moving .stickers {
     transition: none;
@@ -313,7 +304,7 @@ body {
    首页便签卡片
    颜色写在这里而不进 config.js：config 装的是参与计算的可调常数，
    颜色是样式。放进去只会多出一条「JS 注入 CSS 变量」的链路。
-   三个饭点各一套底板与标签色，深浅各一套，靠 <body data-slot> 切换。
+   三个饭点各一套底板与标签色，深浅各一套，靠 <html data-slot> 切换。
    ============================================================ */
 :root {
   --paper: #fffdf7;
@@ -329,6 +320,7 @@ body {
   --board-b: #2a1f3d;
   --chip-bg: #e6dcff;
   --chip-fg: #4a2d7a;
+  --tabbar-h: 58px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -340,79 +332,117 @@ body {
     --ink-faint: #8a7b6d;
     --paper-line: #453a30;
     --paper-ghost: #2f2822;
-      --tape: rgba(206, 170, 96, 0.55);   /* 压暗，否则夜里胶带在发光 */
+    --tape: rgba(206, 170, 96, 0.55);   /* 压暗，否则夜里胶带在发光 */
     --frame: #e4dbcd;
   }
 }
 
-[data-slot="breakfast"] { --board-a: #f6c85f; --board-b: #e8a33d; --chip-bg: #ffe6a8; --chip-fg: #8a5a12; --board-ink: #5c3d08; }
-[data-slot="lunch"]     { --board-a: #f08a4b; --board-b: #c9552e; --chip-bg: #ffdcc2; --chip-fg: #8a3a12; --board-ink: #fff1e6; }
-[data-slot="dinner"]    { --board-a: #3b2a52; --board-b: #2a1f3d; --chip-bg: #e6dcff; --chip-fg: #4a2d7a; --board-ink: #d9c8ff; }
+[data-slot="breakfast"] { --board-a: #f6c85f; --board-b: #e8a33d; --chip-bg: #ffe6a8; --chip-fg: #8a5a12; }
+[data-slot="lunch"]     { --board-a: #f08a4b; --board-b: #c9552e; --chip-bg: #ffdcc2; --chip-fg: #8a3a12; }
+[data-slot="dinner"]    { --board-a: #3b2a52; --board-b: #2a1f3d; --chip-bg: #e6dcff; --chip-fg: #4a2d7a; }
 
 @media (prefers-color-scheme: dark) {
-  [data-slot="breakfast"] { --board-a: #3a2a12; --board-b: #1a1408; --chip-bg: #3a2d18; --chip-fg: #ffd9a0; --board-ink: #e6c98f; }
-  [data-slot="lunch"]     { --board-a: #3a2014; --board-b: #1a0e08; --chip-bg: #3d2418; --chip-fg: #ffc3a0; --board-ink: #eab89a; }
-  [data-slot="dinner"]    { --board-a: #241a33; --board-b: #14101d; --chip-bg: #3a2d55; --chip-fg: #d9c8ff; --board-ink: #b9a8e0; }
+  [data-slot="breakfast"] { --board-a: #3a2a12; --board-b: #1a1408; --chip-bg: #3a2d18; --chip-fg: #ffd9a0; }
+  [data-slot="lunch"]     { --board-a: #3a2014; --board-b: #1a0e08; --chip-bg: #3d2418; --chip-fg: #ffc3a0; }
+  [data-slot="dinner"]    { --board-a: #241a33; --board-b: #14101d; --chip-bg: #3a2d55; --chip-fg: #d9c8ff; }
 }
 
-/* 饭点颜色铺满整个屏幕，不是卡片外面一块圆角板子。写在 body 上，
-   浏览器会把它延伸到整个画布 —— 状态栏底下、iOS 下拉回弹露出来的地方都是它。
-   background-color 兜底：渐变按文档高度铺，回弹拉出文档之外的那一截靠它。
-   不用 background-attachment: fixed，iOS Safari 不支持。 */
-body[data-slot] {
-  min-height: 100vh;
-  min-height: 100dvh;
+/* ---- 整页：一屏，不滚动 ----
+   饭点颜色铺满屏幕，写在 <html> 上（不是 body）：html 的背景就是整张画布。
+   页面锁死在一屏高、不许上下滚 —— 以前能滚，渐变按文档高度铺，
+   回弹拉出来的那一截是另一个颜色，中间有一道分界线。
+   touch-action: none 把所有手势交给 JS：纵向没东西可滚，横向是翻牌子。
+   只在首页生效（data-slot 只有 ui-today.js 会写），候选池照常滚。 */
+html[data-slot] {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: linear-gradient(160deg, var(--board-a), var(--board-b));
   background-color: var(--board-b);
-  background-image: linear-gradient(160deg, var(--board-a), var(--board-b));
 }
-/* 卡片拖出屏幕、翻页时飞出去，会把页面撑宽，手机上就能左右晃。
-   在外层横向裁掉。用 clip 不用 hidden：clip 不会把 .wrap 变成滚动容器，
-   纵向照旧由页面滚。.wrap 在手机上占满屏宽，裁的位置就是屏幕边缘，
-   拍立得和贴纸伸出纸边的那点距离在 .wrap 的内边距里，裁不到。 */
-body[data-slot] .wrap { overflow-x: clip; }
+html[data-slot] body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: transparent;
+  touch-action: none;
+  display: flex;
+  flex-direction: column;
+}
+/* 卡片拖出屏幕、翻页时飞出去，会把页面撑宽。横向裁掉，用 clip 不用 hidden：
+   clip 不会变成滚动容器。拍立得和贴纸伸出纸边的距离在内边距里，裁不到。
+   底部内边距给固定在下面的 TabBar 让位。 */
+html[data-slot] .wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 1rem calc(var(--tabbar-h) + 1.4rem);
+  overflow-x: clip;
+}
 
-/* 底部「候选池」链接放在彩色底上，原来的灰字看不清，按饭点换深浅。 */
-body[data-slot] .pool-link { color: var(--board-ink); }
-
-/* 底板只剩边距：上边留给胶带和拍立得伸出去，左右留给贴纸。 */
-.board { position: relative; padding: 1.6rem 0.25rem 0.5rem; }
+/* 底板只剩边距：上边留给胶带和拍立得伸出去，左右留给贴纸。
+   它和里面的 .stack 都撑满剩下的高度 —— 卡片要一直铺到 TabBar 上面。 */
+.board {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.6rem 0.25rem 0.4rem;
+}
 .board[hidden] { display: none; }
 
-/* 上面那张（.paper）和垫在底下那张（.under）叠在一起的容器。 */
-.stack { position: relative; }
+/* 上面那张（.paper）和垫在底下那张（.under）叠在一起的容器。
+   飘动挂在这一层：两张卡片一起飘，姿态永远一致 —— 以前飘动挂在上面那张的
+   .note 上、底下那张不飘，翻页替换的那一帧姿态对不上，看起来「闪一下」。 */
+.stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  animation: note-float 5s ease-in-out infinite;
+}
+@keyframes note-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-5px) rotate(1.1deg); }
+}
+/* 手指按住时停住，跟手才不会边跟边飘。 */
+.stack.held { animation-play-state: paused; }
+
+/* 拖动层。transform 归 JS，所以这一层不能有 CSS 动画。
+   will-change 让它常驻独立图层 —— 否则动画一结束图层被撤掉、重新栅格化，
+   iOS 上文字会闪一下。 */
+.paper { position: relative; height: 100%; will-change: transform; }
 
 /* 垫在底下的真卡片，内容是下一道（往右拖时是上一道），由 ui-today.js 填。
+   和上面那张一样大（inset: 0）：翻页替换时高度不跳。
    --p 是它浮上来的程度：0 平时（小一圈、往上错开 12px，从上沿露一条边），
-   1 刚好和上面那张重合。拖动时 JS 逐帧写 --p，所以默认不带过渡；松手后
-   加 .moving 才带，让它自己滑到位。
-   胶带、拍立得、贴纸平时藏起来：它们会从上沿伸出来，跟上面那张的叠在一起
-   显得乱；浮上来的过程中跟着淡入，到位时和上面那张一模一样。 */
+   1 刚好和上面那张重合。拖动时 JS 逐帧写 --p，默认不带过渡；松手后
+   加 .moving 才带，让它自己滑到位。过渡比飞出动画（0.22s）短，
+   保证替换那一刻它已经完全到位。
+   胶带、拍立得、贴纸平时藏起来，浮上来的过程中跟着淡入。 */
 .under {
   --p: 0;
   position: absolute;
-  top: 0; left: 0; right: 0;
+  inset: 0;
   transform-origin: 50% 0;
   transform: translateY(calc(-12px * (1 - var(--p)))) scale(calc(0.94 + 0.06 * var(--p)));
   pointer-events: none;
+  will-change: transform;
 }
 .under[hidden] { display: none; }
-.under.moving { transition: transform 0.22s ease-out; }
+.under.moving { transition: transform 0.18s ease-out; }
 .under .tape, .under .polaroid, .under .stickers { opacity: var(--p); }
-.under.moving .tape, .under.moving .polaroid, .under.moving .stickers { transition: opacity 0.22s ease-out; }
-/* 底下那张不飘、不摇、不闪：静止在上面那张的基准姿态上，翻页替换时才对得上。 */
-.under * { animation: none !important; }
-.under .note { box-shadow: 0 6px 16px rgb(20 10 30 / 0.25); }
-
-/* 拖动层。transform 由 JS 写，所以这一层不能有 CSS 动画 ——
-   两个 transform 写一个元素上会互相顶掉。飘动在里面那层 .note 上。
-   touch-action: pan-y 把纵向滚动留给浏览器，横向留给 JS，
-   于是手势监听器可以保持 passive，不需要 preventDefault。 */
-.paper { position: relative; touch-action: pan-y; }
+.under.moving .tape, .under.moving .polaroid, .under.moving .stickers { transition: opacity 0.18s ease-out; }
 
 .note {
   position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   border-radius: 1rem;
-  padding: 1.7rem 1.2rem 1.3rem;
+  padding: 1.7rem 1.2rem 1.1rem;
   background: var(--paper);
   color: var(--ink);
   background-image:
@@ -420,7 +450,10 @@ body[data-slot] .pool-link { color: var(--board-ink); }
     repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 26px);
   box-shadow: 0 12px 28px rgb(20 10 30 / 0.35);
   transform: rotate(-1.6deg);
+  transition: box-shadow 0.12s ease;
 }
+/* 按「去下单」时纸的投影收紧，配合按钮下沉 —— 像真被按住了。 */
+.paper.pressed .note { box-shadow: 0 4px 10px rgb(20 10 30 / 0.4); }
 
 .tape {
   position: absolute;
@@ -435,27 +468,32 @@ body[data-slot] .pool-link { color: var(--board-ink); }
 .polaroid {
   position: absolute;
   right: -14px; top: -26px;
-  width: 86px;
-  padding: 7px 7px 19px;
+  width: 96px;
+  padding: 7px 7px 20px;
   background: var(--frame);
   border-radius: 3px;
   box-shadow: 0 8px 18px rgb(20 10 30 / 0.45);
   transform: rotate(9deg);
   transform-origin: 50% 0;   /* 钉子在上边中点，摇摆绕它转 */
   z-index: 2;
+  animation: polaroid-sway 4.2s ease-in-out infinite;
+}
+@keyframes polaroid-sway {
+  0%, 100% { transform: rotate(7deg); }
+  50%      { transform: rotate(11.5deg); }
 }
 .polaroid .pic {
-  height: 76px;
+  height: 86px;
   border-radius: 2px;
   display: grid;
   place-items: center;
-  font-size: 2.7rem;
+  font-size: 3rem;
   background: linear-gradient(150deg, #ffe0b8, #ffc9d4);
 }
 .polaroid .cap {
   margin-top: 5px;
   text-align: center;
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   color: #9a8977;
   font-family: "Yuanti SC", "PingFang SC", sans-serif;
 }
@@ -465,12 +503,22 @@ body[data-slot] .pool-link { color: var(--board-ink); }
 
 .stickers { position: absolute; inset: -10px; pointer-events: none; }
 .stickers span { position: absolute; display: block; transform: rotate(var(--r)); }
-.sk1 { left: -4px; top: 92px; font-size: 1.3rem; --r: -16deg; }
-.sk2 { right: -8px; bottom: 106px; font-size: 1.05rem; --r: 14deg; }
+.sk1 { left: -4px; top: 104px; font-size: 1.3rem; --r: -16deg; animation: sticker-twinkle 2.4s ease-in-out infinite; }
+.sk2 { right: -8px; bottom: 150px; font-size: 1.05rem; --r: 14deg; animation: sticker-shiver 1.8s ease-in-out infinite; }
 .sk3 { left: 34px; top: -6px; font-size: 0.95rem; --r: 18deg; }
+@keyframes sticker-twinkle {
+  0%, 100% { opacity: 0.35; transform: rotate(var(--r)) scale(0.85); }
+  50%      { opacity: 1;    transform: rotate(var(--r)) scale(1.12); }
+}
+@keyframes sticker-shiver {
+  0%, 100% { transform: rotate(var(--r)); }
+  25%      { transform: rotate(calc(var(--r) - 7deg)); }
+  75%      { transform: rotate(calc(var(--r) + 7deg)); }
+}
 
+/* 标签和理由在纵向 flex 里会被拉满整行，按回内容宽度。 */
 .slot-label {
-  display: inline-block;
+  align-self: flex-start;
   margin: 0;
   padding: 0.22rem 0.65rem;
   border-radius: 0.55rem;
@@ -485,62 +533,67 @@ body[data-slot] .pool-link { color: var(--board-ink); }
    至少几百 KB，违反零依赖也拖慢首屏。
    max-width 是给拍立得让地方，不能去掉，否则长菜名会压到相框底下。 */
 .dish-name {
-  margin: 0.75rem 0 0.5rem;
-  max-width: 76%;
-  font-size: 2.05rem;
-  line-height: 1.24;
+  margin: 0.9rem 0 0.6rem;
+  max-width: 72%;
+  font-size: 2.2rem;
+  line-height: 1.22;
   font-family: "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
 }
 
 .meta-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
-.shop-name { margin: 0; color: var(--ink-soft); font-size: 0.95rem; }
+.shop-name { margin: 0; color: var(--ink-soft); font-size: 1rem; }
 /* 价格没有框也没有圈，只能靠字号撑起分量。 */
-.price { margin: 0; font-size: 1.3rem; font-weight: 700; }
+.price { margin: 0; font-size: 1.4rem; font-weight: 700; }
 
+/* 下边距是内容区与按钮区之间的最小间隔，屏幕矮时两块不会贴在一起。 */
 .reason {
-  display: inline-block;
-  margin: 0.95rem 0 0;
-  padding: 0.38rem 0.75rem;
+  align-self: flex-start;
+  margin: 1rem 0 1.2rem;
+  padding: 0.4rem 0.8rem;
   border-radius: 0.6rem;
   background: var(--chip-bg);
   color: var(--chip-fg);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   transform: rotate(0.9deg);
 }
 
-/* .primary / .ghost 的基础规则给候选池共用，这里只在 .board 里改外观。 */
+/* .primary / .ghost 的基础规则给候选池共用，这里只在 .board 里改外观。
+   margin-top: auto 把「去下单」和下面几行一起推到纸的底部 ——
+   纸撑满了屏幕，内容在上、操作在下，中间留白随屏幕高度伸缩。 */
 .board .primary {
-  margin-top: 1.1rem;
+  margin-top: auto;
   border-radius: 999px;
   background: linear-gradient(100deg, #ff8a3d, #ff5f9e);
   box-shadow: 0 6px 0 #c23f78;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
+.board .primary:active { transform: translateY(5px); box-shadow: 0 1px 0 #c23f78; }
 .board .primary[aria-disabled="true"] {
   background: var(--paper-line);
   color: var(--ink-faint);
   box-shadow: none;
 }
 
-.ghost-row { display: flex; gap: 0.6rem; }
+.ghost-row { display: flex; gap: 0.6rem; margin-top: 0.9rem; }
 .board .ghost {
   flex: 1;
   width: auto;
+  margin-top: 0;
   border-radius: 999px;
   border: 2px solid var(--paper-line);
   background: var(--paper-ghost);
   color: var(--ink-faint);
 }
 
-/* 「上一个 / 下一个」不再是右上角的描边按钮，改成最下面一行的两个角标：
-   没有边框和背景，字比正文小一号，中间夹一句「划一划换一个」。
-   三样加起来约 210px，卡片内宽 273px（375 屏），留 63px 余量，不会换行。 */
+/* 「上一个 / 下一个」是最下面一行的两个角标，中间夹一句「划一划换一个」。
+   箭头动画按位置（首尾子元素）挂，不按 id：底下那张是复制出来摘了 id 的，
+   按 id 挂它就不动，翻页替换时箭头位置对不上。 */
 .swap-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-top: 1rem;
+  margin-top: 0.9rem;
 }
 .swap {
   border: none;
@@ -551,6 +604,10 @@ body[data-slot] .pool-link { color: var(--board-ink); }
   cursor: pointer;
 }
 .swap i { font-style: normal; display: inline-block; }
+.swap-row > .swap:first-child i { animation: nudge-left 1.5s ease-in-out infinite; }
+.swap-row > .swap:last-child i { animation: nudge-right 1.5s ease-in-out 0.75s infinite; }
+@keyframes nudge-left  { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
+@keyframes nudge-right { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
 .swipe-hint { color: var(--ink-faint); font-size: 0.74rem; }
 
 /* 轮播位置。候选不多时画小横杠，超过 CAROUSEL_DOTS_MAX 道就退回
@@ -561,7 +618,8 @@ body[data-slot] .pool-link { color: var(--board-ink); }
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  margin: 0.9rem 0 0;
+  min-height: 1rem;
+  margin: 0.7rem 0 0;
   color: var(--ink-faint);
   font-size: 0.8rem;
 }
@@ -570,63 +628,79 @@ body[data-slot] .pool-link { color: var(--board-ink); }
   height: 4px;
   border-radius: 3px;
   background: var(--paper-line);
-  transition: width 0.25s ease, background 0.25s ease;
 }
 .carousel-pos i.on { width: 26px; background: var(--accent); transform: rotate(-3deg); }
 
-/* ---- 动效 ----
-   飘动挂在 .note 上，不能挂到 .paper：那一层的 transform 归 JS。 */
-.note { animation: note-float 5s ease-in-out infinite; }
-@keyframes note-float {
-  0%, 100% { transform: rotate(-1.6deg) translateY(0); }
-  50%      { transform: rotate(-0.5deg) translateY(-5px); }
-}
-/* 手指按住时停住，跟手才不会边跟边飘。 */
-.paper.held .note { animation-play-state: paused; }
-/* 按「去下单」时纸的投影收紧，配合按钮下沉 —— 像真被按住了。 */
-.paper.pressed .note { box-shadow: 0 4px 10px rgb(20 10 30 / 0.4); }
-
-.polaroid { animation: polaroid-sway 4.2s ease-in-out infinite; }
-@keyframes polaroid-sway {
-  0%, 100% { transform: rotate(7deg); }
-  50%      { transform: rotate(11.5deg); }
+/* 矮屏（iPhone SE 一类）：纸撑不下默认间距时收一收，别让按钮压到 TabBar 上。 */
+@media (max-height: 700px) {
+  .note { padding-top: 1.4rem; padding-bottom: 0.9rem; }
+  .dish-name { font-size: 1.85rem; margin: 0.6rem 0 0.4rem; }
+  .reason { margin-top: 0.7rem; }
+  .ghost-row, .swap-row { margin-top: 0.6rem; }
 }
 
-.sk1 { animation: sticker-twinkle 2.4s ease-in-out infinite; }
-@keyframes sticker-twinkle {
-  0%, 100% { opacity: 0.35; transform: rotate(var(--r)) scale(0.85); }
-  50%      { opacity: 1;    transform: rotate(var(--r)) scale(1.12); }
+/* ============================================================
+   底部 TabBar：翻牌子 / 御膳房
+   浮在底部的一条便签纸：圆角、格子纸纹、左上角贴一小段胶带。
+   当前那一页的标签是一块歪着的彩色贴片，图标轻轻上下晃。
+   颜色用便签那套变量，两页都能用 —— 候选池没有 data-slot，取默认那套。
+   ============================================================ */
+.tabbar {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 10px);
+  z-index: 40;
+  width: min(calc(100% - 2.5rem), 20rem);
+  height: var(--tabbar-h);
+  margin-inline: auto;
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.35rem;
+  border-radius: 999px;
+  background: var(--paper);
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 13px);
+  box-shadow: 0 10px 26px rgb(20 10 30 / 0.3);
+  transform: rotate(-0.8deg);
+  touch-action: manipulation;
 }
-.sk2 { animation: sticker-shiver 1.8s ease-in-out infinite; }
-@keyframes sticker-shiver {
-  0%, 100% { transform: rotate(var(--r)); }
-  25%      { transform: rotate(calc(var(--r) - 7deg)); }
-  75%      { transform: rotate(calc(var(--r) + 7deg)); }
+.tabbar::before {
+  content: "";
+  position: absolute;
+  top: -9px; left: 22px;
+  width: 46px; height: 18px;
+  background: var(--tape);
+  transform: rotate(-8deg);
+}
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  color: var(--ink-faint);
+  text-decoration: none;
+  font-family: "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-ico { font-size: 1.35rem; display: inline-block; transition: transform 0.12s ease; }
+.tab:active .tab-ico { transform: scale(0.8) rotate(-12deg); }
+.tab.on {
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  transform: rotate(-2deg);
+  box-shadow: 0 3px 0 rgb(20 10 30 / 0.12);
+}
+.tab.on .tab-ico { animation: tab-bob 2.2s ease-in-out infinite; }
+@keyframes tab-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-3px) rotate(-10deg); }
 }
 
-/* 换卡时三张贴纸重新弹进来，靠 JS 加 .in 触发（showAt 末尾）。
-   .in 的规则会整条替换掉上面的 animation，所以弹完要把各自的循环接回来 ——
-   只写 sticker-pop 的话，✨ 和 🔥 弹一次就再也不动了。循环的延迟等于
-   弹入的延迟加时长，且不带 backwards，弹的时候不会跟它抢 transform。 */
-.sk1.in {
-  animation: sticker-pop 0.42s cubic-bezier(0.2, 1.5, 0.5, 1) 0.06s backwards,
-             sticker-twinkle 2.4s ease-in-out 0.48s infinite;
-}
-.sk2.in {
-  animation: sticker-pop 0.42s cubic-bezier(0.2, 1.5, 0.5, 1) 0.14s backwards,
-             sticker-shiver 1.8s ease-in-out 0.56s infinite;
-}
-.sk3.in { animation: sticker-pop 0.42s cubic-bezier(0.2, 1.5, 0.5, 1) 0.22s backwards; }
-@keyframes sticker-pop {
-  0%   { transform: scale(0) rotate(0deg); }
-  65%  { transform: scale(1.25) rotate(var(--r)); }
-  100% { transform: scale(1) rotate(var(--r)); }
-}
-
-/* 两个箭头各自朝自己那边推，错开半个周期，别同步。 */
-#prev i { animation: nudge-left 1.5s ease-in-out infinite; }
-#swap i { animation: nudge-right 1.5s ease-in-out infinite 0.75s; }
-@keyframes nudge-left  { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
-@keyframes nudge-right { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
-
-.board .primary:active { transform: translateY(5px); box-shadow: 0 1px 0 #c23f78; }
+/* 候选池那页照常滚动，底部留出 TabBar 的位置，最后一家店不被挡住。 */
+.has-tabbar { padding-bottom: calc(var(--tabbar-h) + 2.5rem + env(safe-area-inset-bottom)); }
+.page-sub { font-size: 0.8rem; font-weight: 400; color: var(--muted); margin-left: 0.3rem; }

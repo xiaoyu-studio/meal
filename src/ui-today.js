@@ -210,6 +210,19 @@ underNote.querySelector('a')?.removeAttribute('href');
 under.appendChild(underNote);
 let underDir = 0;   // 底下现在画的是哪个方向的邻居：1 下一道，-1 上一道
 
+// 两张卡片上都在循环的小动画：拍立得摇、✨ 闪、🔥 摆、两个箭头推。
+// 各自从哪一刻开始播是浏览器定的（底下那张从 hidden 变可见时才开始），
+// 相位对不上，翻页替换那一帧就会看到拍立得「跳一下」。把它们的起点都钉在
+// 文档时间轴的 0 上，同名动画在两张卡片上就永远同相。
+const SYNCED_LOOPS = new Set([
+  'polaroid-sway', 'sticker-twinkle', 'sticker-shiver', 'nudge-left', 'nudge-right',
+]);
+function syncLoops() {
+  for (const a of el('card').getAnimations?.({ subtree: true }) ?? []) {
+    if (SYNCED_LOOPS.has(a.animationName)) a.startTime = 0;
+  }
+}
+
 /** 底下那张换成 dir 方向的邻居。只有一道菜时没有邻居，整张藏起来。 */
 function paintUnder(dir) {
   if (state.ranked.length < 2) {
@@ -220,6 +233,7 @@ function paintUnder(dir) {
   under.hidden = false;
   paintNote(underNote, wrapIndex(state.index, dir));
   underDir = dir;
+  syncLoops();
 }
 
 /**
@@ -245,15 +259,10 @@ function showAt(index) {
   el('empty').hidden = true;
   el('card').hidden = false;
   // 底下那张平时垫的是下一道。
+  // 以前这里还会让贴纸重新弹一次，但那是翻页时「当前卡片闪一下」的来源之一 ——
+  // 底下那张浮上来时贴纸已经在了，替换后又缩到 0 再弹出来。去掉了。
   setUnderProgress(0);
   paintUnder(1);
-  // 换一道菜就让三张贴纸重新弹进来。先摘掉再强制回流再挂上，否则
-  // 同名 class 不会重新触发动画。只动上面那张的贴纸，底下那张不动。
-  for (const sticker of el('paper').querySelectorAll('.stickers span')) {
-    sticker.classList.remove('in');
-    void sticker.offsetWidth;
-    sticker.classList.add('in');
-  }
 }
 
 /** 前后翻一道，首尾相接。 */
@@ -272,14 +281,20 @@ const prefersReducedMotion = () =>
  *
  * 动画只碰 .paper 的 transform，不碰 .note —— 飘动在那一层。
  */
+// 正在飞出的那 0.22 秒里不接新的翻页或拖动。飞出动画是 fill: forwards，
+// 这时再拖，写上去的位移被动画盖着看不见，动画一结束就「啪」地跳出来 ——
+// 连着快速划两下时的闪烁就是这么来的。
+let flipping = false;
+
 function animateStep(delta) {
-  if (state.ranked.length === 0) return;
+  if (state.ranked.length === 0 || flipping) return;
   const paper = el('paper');
   if (prefersReducedMotion() || !paper.animate) {
     paper.style.transform = '';
     step(delta);
     return;
   }
+  flipping = true;
   if (underDir !== delta) paintUnder(delta);
   setUnderProgress(1, true);
   const from = paper.style.transform || 'translateX(0)';
@@ -296,16 +311,17 @@ function animateStep(delta) {
   out.onfinish = () => {
     step(delta);   // showAt 里会把底下那张复位、重画成新的下一道
     out.cancel();
+    flipping = false;
   };
 }
 
 async function render(now = Date.now(), data = null) {
   try {
     const slot = resolveSlot(now);
-    // 整页底色跟着饭点走（css/style.css 的 body[data-slot]）。在这里写而不在
-    // showAt 里写：「没菜可推」那张卡片也铺在同一个颜色上，切来切去底色不跳。
-    // 从后台切回来跨了饭点时 refreshIfStale 会重画，属性跟着更新。
-    document.body.dataset.slot = slot;
+    // 整页底色跟着饭点走（css/style.css 的 html[data-slot]），写在 <html> 上：
+    // 它的背景就是整张画布。在这里写而不在 showAt 里写：「没菜可推」那张卡片
+    // 也铺在同一个颜色上。从后台切回来跨了饭点时 refreshIfStale 会重画，属性跟着更新。
+    document.documentElement.dataset.slot = slot;
     const { shops, dishes, events } = data ?? await loadAll();
     const nowKey = localDateKey(now);
 
@@ -432,35 +448,56 @@ el('prev').addEventListener('click', () => {
 
 // 左右拖动翻菜，卡片跟着手指走。
 //
-// 轴向锁定是保住验收第 17 条（滑动不与纵向滚动打架）的关键：位移在任一方向
-// 都不到 AXIS_LOCK_PX 时什么都不做 —— 手指刚落下的抖动不该决定方向；第一次
-// 超过它时比较 |dx| 与 |dy| 定下轴向，之后不再改。
+// 整页都是拖动区（TabBar 和补问浮层除外），**按钮上起手也算**：只要是横向划，
+// 就是翻牌子；原地点一下才是点按钮。划过之后紧跟的那次 click 会被吞掉，
+// 否则从「去下单」上划过去，松手时会跳去外卖 App。
 //
-// .paper 上的 touch-action: pan-y 把纵向滚动留给浏览器，所以这里不需要
-// preventDefault，监听器可以保持 passive，不会让滚动一卡一卡。
+// 轴向锁定：位移在任一方向都不到 AXIS_LOCK_PX 时什么都不做 —— 手指刚落下的
+// 抖动不该决定方向；第一次超过它时比较 |dx| 与 |dy| 定下轴向，之后不再改。
+// 纵向就当没拖（这一页不滚动，见 style.css 的 html[data-slot]）。
+//
+// 指针捕获要等锁定为横向之后才设：一按下就捕获的话，原地点按钮时 click 会
+// 被派发到 body 上，按钮就点不动了。
+//
+// 这一页 touch-action: none，浏览器不抢手势，监听器保持 passive 即可。
 const AXIS_LOCK_PX = 6;
 const paper = el('paper');
-let drag = null;   // { x, y, dx, axis } —— 没在拖时是 null
+const stack = paper.parentElement;
+let drag = null;        // { x, y, dx, axis, id } —— 没在拖时是 null
+let bounce = null;      // 正在播的弹回动画；新一次拖动开始时要先掐掉
+let swallowClick = false;
 
-paper.addEventListener('pointerdown', (e) => {
-  // 在按钮或链接上起手不算拖卡片：否则在「去下单」上手指稍微一滑，
-  // 链接就点不动了。
-  if (e.target.closest('a, button')) return;
-  drag = { x: e.clientX, y: e.clientY, dx: 0, axis: null };
-  // 合成事件或奇怪的 pointerId 会抛，吞掉即可 —— 捕获不到只是拖到边缘
-  // 可能丢事件，不影响主路径。
-  try { paper.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
-  paper.classList.add('held');
+document.addEventListener('click', (e) => {
+  if (!swallowClick) return;
+  swallowClick = false;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
+
+document.body.addEventListener('pointerdown', (e) => {
+  swallowClick = false;
+  if (drag || flipping || el('card').hidden) return;
+  if (e.target.closest('.tabbar, #feedback')) return;
+  // 弹回还没播完就又按下了：掐掉它，否则它盖着新拖出来的位移，播完才「啪」地跳出来。
+  bounce?.cancel();
+  bounce = null;
+  drag = { x: e.clientX, y: e.clientY, dx: 0, axis: null, id: e.pointerId };
 });
 
-paper.addEventListener('pointermove', (e) => {
-  if (!drag) return;
+document.body.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
   const dx = e.clientX - drag.x;
   const dy = e.clientY - drag.y;
   if (drag.axis === null) {
     if (Math.abs(dx) < AXIS_LOCK_PX && Math.abs(dy) < AXIS_LOCK_PX) return;
     drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-    if (drag.axis === 'y') { endDrag(e, true); return; }   // 让页面去滚
+    if (drag.axis === 'y') { drag = null; return; }
+    swallowClick = true;
+    paper.classList.remove('pressed');
+    stack.classList.add('held');
+    // 合成事件或奇怪的 pointerId 会抛，吞掉即可 —— 捕获不到只是拖到边缘
+    // 可能丢事件，不影响主路径。
+    try { document.body.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
   }
   drag.dx = dx;
   // 0.88 次幂：小位移几乎一比一跟手，拖得越远越沉。同时按位移的 1/26
@@ -477,11 +514,12 @@ paper.addEventListener('pointermove', (e) => {
 }, { passive: true });
 
 function endDrag(e, cancel) {
-  if (!drag) return;
-  const { dx } = drag;
+  if (!drag || e.pointerId !== drag.id) return;
+  const { dx, axis } = drag;
   drag = null;
-  paper.classList.remove('held');
-  try { paper.releasePointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+  if (axis !== 'x') return;   // 原地点了一下，交给 click
+  stack.classList.remove('held');
+  try { document.body.releasePointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
 
   // 阈值按卡片宽度算，不用固定像素 —— 换个更宽的屏手感才一样。
   if (!cancel && Math.abs(dx) > paper.offsetWidth * SWIPE_RATIO) {
@@ -489,21 +527,19 @@ function endDrag(e, cancel) {
     return;
   }
   // 不够就弹回原位，带一点过冲。
-  if (!paper.style.transform) return;   // 根本没动过（比如纵向滑）
+  if (!paper.style.transform) return;
   setUnderProgress(0, true);   // 底下那张跟着沉回去
   const from = paper.style.transform;
   // 先清掉内联位移再放动画：动画播放期间盖在上面，播完自然落回原位。
-  // 不在 onfinish 里清 —— 那 0.3 秒里手指可能又按下开始新一次拖动，
-  // 到时 onfinish 会把新拖出来的位移抹掉。
   paper.style.transform = '';
-  paper.animate?.(
+  bounce = paper.animate?.(
     [{ transform: from }, { transform: 'translateX(0) rotate(0deg)' }],
     { duration: 300, easing: 'cubic-bezier(0.2, 1.4, 0.4, 1)' },
-  );
+  ) ?? null;
 }
 
-paper.addEventListener('pointerup', (e) => endDrag(e, false), { passive: true });
-paper.addEventListener('pointercancel', (e) => endDrag(e, true), { passive: true });
+document.body.addEventListener('pointerup', (e) => endDrag(e, false), { passive: true });
+document.body.addEventListener('pointercancel', (e) => endDrag(e, true), { passive: true });
 
 // 按住「去下单」时整张纸的投影收紧（.pressed），松手复位。
 el('order').addEventListener('pointerdown', () => { paper.classList.add('pressed'); });

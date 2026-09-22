@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>候选池</title>
+<title>御膳房</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -12,10 +12,8 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<main class="wrap">
-  <a class="pool-link" href="index.html">← 今天这顿</a>
-
-  <h1 class="page-title">候选池</h1>
+<main class="wrap has-tabbar">
+  <h1 class="page-title">御膳房 <span class="page-sub">候选池</span></h1>
 
   <div id="io-row" class="io-row">
     <button id="export" class="ghost" type="button">导出备份</button>
@@ -50,6 +48,11 @@
 
   <div id="shops"></div>
 </main>
+
+<nav class="tabbar" aria-label="页面">
+  <a class="tab" href="index.html"><span class="tab-ico">🎴</span><span class="tab-name">翻牌子</span></a>
+  <a class="tab on" href="pool.html" aria-current="page"><span class="tab-ico">🍱</span><span class="tab-name">御膳房</span></a>
+</nav>
 
 <div id="toast" class="toast" hidden></div>
 
