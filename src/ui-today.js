@@ -154,8 +154,7 @@ async function renderFeedback(now = Date.now(), data = null) {
  * 几十道菜的横杠会排到屏幕外（见 style.css 里 .carousel-pos 的注释）。
  * 用 createElement 不用 innerHTML：这里没有用户数据，但保持全页一致。
  */
-function renderPos(index, total) {
-  const box = el('carousel-pos');
+function renderPos(box, index, total) {
   box.textContent = '';
   if (total > CAROUSEL_DOTS_MAX) {
     box.textContent = `${index + 1} / ${total}`;
@@ -168,50 +167,107 @@ function renderPos(index, total) {
   }
 }
 
+/** 轮播里第 i 道之后（delta 为负就是之前）第 |delta| 道的下标，首尾相接。 */
+function wrapIndex(i, delta) {
+  const n = state.ranked.length;
+  return (((i + delta) % n) + n) % n;
+}
+
+/**
+ * 把第 i 道菜的内容写进一张便签。上面那张（有 id 的）和垫在底下那张
+ * （复制出来、摘掉了 id）共用这一个函数，所以按 class 找元素，不按 id ——
+ * 两张卡片长得必须一模一样，翻页时底下那张才能无缝顶上来。
+ * 全部走 textContent：菜名和店名是用户数据。
+ */
+function paintNote(note, i) {
+  const row = state.ranked[i];
+  const shop = state.shops.find((s) => s.id === row.dish.shopId);
+  const q = (sel) => note.querySelector(sel);
+  q('.slot-label').textContent = SLOT_LABELS[state.slot];
+  q('.dish-name').textContent = row.dish.name;
+  q('.shop-name').textContent = shop.name;
+  q('.price').textContent = `约 ¥${row.dish.refPrice}`;
+  q('.reason').textContent = row.reason;
+  // 拍立得：emoji 按菜名猜，猜不着退回 🍽️；下面那行字跟着饭点走。
+  q('.pic').textContent = dishEmoji(row.dish.name);
+  q('.cap').textContent = POLAROID_CAPS[state.slot] ?? '';
+  renderPos(q('.carousel-pos'), i, state.ranked.length);
+}
+
+// ---- 垫在底下的那张卡片 ----
+//
+// 不是装饰：里面就是真的下一道（往右拖时换成上一道）。平时它比上面那张小一圈、
+// 往上错开一点，从上沿露出一条边；拖动时跟着拖的距离慢慢浮上来，到翻页阈值时
+// 刚好和上面那张重合。翻页时上面那张飞走，底下这张已经在原位了。
+//
+// 它是从上面那张复制出来的：结构一致才能无缝替换。复制后摘掉所有 id（否则
+// el() 会找错元素）、摘掉「去下单」的 href，整个容器 inert —— 只给看，
+// 点不到、读屏软件也跳过。
+const under = el('under');
+const underNote = el('paper').querySelector('.note').cloneNode(true);
+for (const node of underNote.querySelectorAll('[id]')) node.removeAttribute('id');
+underNote.querySelector('a')?.removeAttribute('href');
+under.appendChild(underNote);
+let underDir = 0;   // 底下现在画的是哪个方向的邻居：1 下一道，-1 上一道
+
+/** 底下那张换成 dir 方向的邻居。只有一道菜时没有邻居，整张藏起来。 */
+function paintUnder(dir) {
+  if (state.ranked.length < 2) {
+    under.hidden = true;
+    underDir = 0;
+    return;
+  }
+  under.hidden = false;
+  paintNote(underNote, wrapIndex(state.index, dir));
+  underDir = dir;
+}
+
+/**
+ * 底下那张浮上来的程度，0 是平时（缩小、错开），1 是和上面那张重合。
+ * 具体的缩放和位移在 CSS 里按 --p 算，这里只写一个数。
+ * smooth 为真时带过渡（松手之后），拖动过程中必须不带 —— 要跟手。
+ */
+function setUnderProgress(p, smooth = false) {
+  under.classList.toggle('moving', smooth);
+  under.style.setProperty('--p', String(p));
+}
+
 /** 把轮播的第 i 项画到卡片上。不写任何事件 —— 浏览是免费的。 */
 function showAt(index) {
   const row = state.ranked[index];
   const shop = state.shops.find((s) => s.id === row.dish.shopId);
   state = { ...state, index, dish: row.dish, shop };
 
-  el('slot-label').textContent = SLOT_LABELS[state.slot];
-  el('dish-name').textContent = row.dish.name;
-  el('shop-name').textContent = shop.name;
-  el('price').textContent = `约 ¥${row.dish.refPrice}`;
-  el('reason').textContent = row.reason;
-  // 拍立得：emoji 按菜名猜，猜不着退回 🍽️；下面那行字跟着饭点走。
-  el('dish-emoji').textContent = dishEmoji(row.dish.name);
-  el('polaroid-cap').textContent = POLAROID_CAPS[state.slot] ?? '';
-  // 配色靠这个属性切换（css/style.css 的 [data-slot=...]）。从后台切回来
-  // 跨了饭点时 refreshIfStale 会重画，属性跟着更新。
-  document.body.dataset.slot = state.slot;
-  renderPos(index, state.ranked.length);
+  paintNote(el('paper').querySelector('.note'), index);
   // 每翻一张都要重挂 —— 换了菜就换了店，href 不跟着走就会跳到上一家。
   setShopLink(el('order'), shop.link);
   el('failure').hidden = true;
   el('empty').hidden = true;
   el('card').hidden = false;
+  // 底下那张平时垫的是下一道。
+  setUnderProgress(0);
+  paintUnder(1);
   // 换一道菜就让三张贴纸重新弹进来。先摘掉再强制回流再挂上，否则
-  // 同名 class 不会重新触发动画。
-  for (const sticker of document.querySelectorAll('.stickers span')) {
+  // 同名 class 不会重新触发动画。只动上面那张的贴纸，底下那张不动。
+  for (const sticker of el('paper').querySelectorAll('.stickers span')) {
     sticker.classList.remove('in');
     void sticker.offsetWidth;
     sticker.classList.add('in');
   }
 }
 
-/** 前后翻一道，首尾相接。取模两次是为了让负数也落回正区间。 */
+/** 前后翻一道，首尾相接。 */
 function step(delta) {
   if (state.ranked.length === 0) return;
-  const n = state.ranked.length;
-  showAt((((state.index + delta) % n) + n) % n);
+  showAt(wrapIndex(state.index, delta));
 }
 
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 /**
- * 翻一道并放动画：当前卡片往手指的方向飞出去，换内容，新的从反方向弹进来。
+ * 翻一道并放动画：上面那张往手指的方向飞出去，底下那张同时浮到原位；
+ * 飞完换内容，上面那张回到原位，此时它和底下那张画的是同一道菜，看不出替换。
  * 「减弱动态效果」开着时直接换，不放动画。
  *
  * 动画只碰 .paper 的 transform，不碰 .note —— 飘动在那一层。
@@ -224,30 +280,32 @@ function animateStep(delta) {
     step(delta);
     return;
   }
+  if (underDir !== delta) paintUnder(delta);
+  setUnderProgress(1, true);
+  const from = paper.style.transform || 'translateX(0)';
+  paper.style.transform = '';
+  // fill: forwards 让它飞完之后停在屏幕外，等 onfinish 里换好内容再 cancel 回原位 ——
+  // 否则飞完的那一帧会先闪回旧内容。
   const out = paper.animate(
     [
-      { transform: paper.style.transform || 'translateX(0)', opacity: 1 },
+      { transform: from, opacity: 1 },
       { transform: `translateX(${delta > 0 ? -130 : 130}%) rotate(${delta > 0 ? -10 : 10}deg)`, opacity: 0 },
     ],
-    { duration: 200, easing: 'ease-in' },
+    { duration: 220, easing: 'ease-in', fill: 'forwards' },
   );
   out.onfinish = () => {
-    step(delta);
-    // 必须清掉，否则下一张卡片会带着上一张的位移出场。
-    paper.style.transform = '';
-    paper.animate(
-      [
-        { transform: `translateX(${delta > 0 ? 120 : -120}%) rotate(${delta > 0 ? 8 : -8}deg)`, opacity: 0 },
-        { transform: 'translateX(0) rotate(0deg)', opacity: 1 },
-      ],
-      { duration: 380, easing: 'cubic-bezier(0.2, 1.2, 0.4, 1)' },
-    );
+    step(delta);   // showAt 里会把底下那张复位、重画成新的下一道
+    out.cancel();
   };
 }
 
 async function render(now = Date.now(), data = null) {
   try {
     const slot = resolveSlot(now);
+    // 整页底色跟着饭点走（css/style.css 的 body[data-slot]）。在这里写而不在
+    // showAt 里写：「没菜可推」那张卡片也铺在同一个颜色上，切来切去底色不跳。
+    // 从后台切回来跨了饭点时 refreshIfStale 会重画，属性跟着更新。
+    document.body.dataset.slot = slot;
     const { shops, dishes, events } = data ?? await loadAll();
     const nowKey = localDateKey(now);
 
@@ -409,6 +467,13 @@ paper.addEventListener('pointermove', (e) => {
   // 轻微旋转 —— 纸被推着走会偏一点，正着平移反而假。
   const damped = Math.sign(dx) * Math.abs(dx) ** 0.88;
   paper.style.transform = `translateX(${damped}px) rotate(${damped / 26}deg)`;
+  // 底下那张：往左拖露出下一道，往右拖露出上一道，方向一变就重画。
+  // 拖到翻页阈值时刚好浮到原位 —— 松手翻过去就是它。
+  if (dx !== 0) {
+    const dir = dx < 0 ? 1 : -1;
+    if (dir !== underDir && underDir !== 0) paintUnder(dir);
+    setUnderProgress(Math.min(Math.abs(dx) / (paper.offsetWidth * SWIPE_RATIO), 1));
+  }
 }, { passive: true });
 
 function endDrag(e, cancel) {
@@ -425,6 +490,7 @@ function endDrag(e, cancel) {
   }
   // 不够就弹回原位，带一点过冲。
   if (!paper.style.transform) return;   // 根本没动过（比如纵向滑）
+  setUnderProgress(0, true);   // 底下那张跟着沉回去
   const from = paper.style.transform;
   // 先清掉内联位移再放动画：动画播放期间盖在上面，播完自然落回原位。
   // 不在 onfinish 里清 —— 那 0.3 秒里手指可能又按下开始新一次拖动，
