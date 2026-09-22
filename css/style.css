@@ -352,23 +352,34 @@ body {
    页面锁死在一屏高、不许上下滚 —— 以前能滚，渐变按文档高度铺，
    回弹拉出来的那一截是另一个颜色，中间有一道分界线。
    touch-action: none 把所有手势交给 JS：纵向没东西可滚，横向是翻牌子。
-   只在首页生效（data-slot 只有 ui-today.js 会写），候选池照常滚。 */
+   只在首页生效（data-slot 只有 ui-today.js 会写），候选池照常滚。
+
+   --vp-gap：iOS 主屏 App 在「内容延伸到状态栏底下」（black-translucent）时，
+   系统报给页面的可用高度会少掉一截状态栏高度，底部那一条页面够不着，
+   固定在底部的 TabBar 和补问面板都被抬高一截（真机上约 59px，比御膳房页高出
+   将近一个 TabBar）。ui-today.js 量出这个差值写进 --vp-gap，这里把整页往下
+   补足；没这个毛病时差值是 0，什么都不变。
+   所以这一页**不用 overflow: hidden 锁滚动**：那会按系统报的（偏短的）高度
+   把底下那条裁掉。不滚动靠 touch-action: none —— 浏览器根本不接纵向手势。
+   TabBar 和补问浮层在这一页也改成相对 body 的 absolute（见下面），跟着 body
+   一起铺到屏幕真正的底部；页面不滚动，absolute 与 fixed 看起来一样。 */
 html[data-slot] {
-  height: 100%;
-  overflow: hidden;
+  height: calc(100% + var(--vp-gap, 0px));
   overscroll-behavior: none;
   background: linear-gradient(160deg, var(--board-a), var(--board-b));
   background-color: var(--board-b);
 }
 html[data-slot] body {
+  position: relative;
   height: 100%;
-  overflow: hidden;
   overscroll-behavior: none;
   background: transparent;
   touch-action: none;
   display: flex;
   flex-direction: column;
 }
+html[data-slot] .tabbar,
+html[data-slot] .overlay { position: absolute; }
 /* 卡片拖出屏幕、翻页时飞出去，会把页面撑宽。横向裁掉，用 clip 不用 hidden：
    clip 不会变成滚动容器。拍立得和贴纸伸出纸边的距离在内边距里，裁不到。
    底部内边距给固定在下面的 TabBar 让位。 */

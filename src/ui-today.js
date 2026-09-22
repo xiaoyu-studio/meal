@@ -8,6 +8,35 @@ import { dishEmoji } from './emoji.js';
 
 const el = (id) => document.getElementById(id);
 
+/**
+ * iOS 主屏 App 在 black-translucent 状态栏下（这一页为了让饭点颜色铺到状态栏
+ * 后面开着它），系统报给页面的可用高度会比屏幕少一截状态栏的高度，底部那条
+ * 页面够不着 —— TabBar 被抬高将近一个自身高度，候选池页没开这个设置就没事。
+ *
+ * 量出屏幕高度与可用高度的差，写进 --vp-gap，CSS 用它把整页补到屏幕底
+ * （style.css 里 html[data-slot] 那段）。不猜一个固定偏移：换台手机、换个系统
+ * 版本，差值不一样，没这个毛病时就是 0。
+ *
+ * 只在主屏 App 里量（navigator.standalone）：Safari 浏览器里可用高度本来就
+ * 比屏幕矮（地址栏、工具栏），那不能补。上限 80px 是保险 —— 状态栏最高 59，
+ * 量出更大的值说明算法假设不成立，宁可不补。
+ * iOS 的 screen.width/height 不随横竖屏交换，按当前朝向取对应那条边。
+ */
+function fixStandaloneViewport() {
+  let gap = 0;
+  if (navigator.standalone === true) {
+    const portrait = window.innerHeight >= window.innerWidth;
+    const full = portrait
+      ? Math.max(screen.width, screen.height)
+      : Math.min(screen.width, screen.height);
+    const diff = full - window.innerHeight;
+    if (diff > 0 && diff <= 80) gap = diff;
+  }
+  document.documentElement.style.setProperty('--vp-gap', `${gap}px`);
+}
+fixStandaloneViewport();
+window.addEventListener('resize', fixStandaloneViewport);
+
 /** slot 优先取 URL 参数（快捷指令会带上），缺失或非法时按当前时间推断。 */
 function resolveSlot(now) {
   const fromUrl = new URLSearchParams(location.search).get('slot');
