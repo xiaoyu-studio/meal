@@ -432,7 +432,12 @@ html[data-slot] .wrap {
   will-change: transform;
 }
 .under[hidden] { display: none; }
-.under.moving { transition: transform 0.18s ease-out; }
+/* 翻页替换之后，新垫上来的那张（再下一道）要淡入，不能「啪」一下出现在后面。
+   JS 先挂 .entering（透明、不带过渡）再摘掉，基础规则上的过渡就把它淡进来。
+   .moving 会整条替换 transition，所以那里也要把 opacity 带上。 */
+.under { transition: opacity 0.35s ease-out; }
+.under.entering { opacity: 0; transition: none; }
+.under.moving { transition: transform 0.18s ease-out, opacity 0.35s ease-out; }
 .under .tape, .under .polaroid, .under .stickers { opacity: var(--p); }
 .under.moving .tape, .under.moving .polaroid, .under.moving .stickers { transition: opacity 0.18s ease-out; }
 

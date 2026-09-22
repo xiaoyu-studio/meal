@@ -309,8 +309,13 @@ function animateStep(delta) {
     { duration: 220, easing: 'ease-in', fill: 'forwards' },
   );
   out.onfinish = () => {
+    // 新垫上来的那张先藏起来：showAt 会把它复位成「再下一道」，
+    // 不藏的话它会在后面「啪」地出现。换完内容再摘掉 .entering 让它淡入。
+    under.classList.add('entering');
     step(delta);   // showAt 里会把底下那张复位、重画成新的下一道
     out.cancel();
+    void under.offsetWidth;   // 先让「透明」这一帧生效，过渡才有起点
+    under.classList.remove('entering');
     flipping = false;
   };
 }
