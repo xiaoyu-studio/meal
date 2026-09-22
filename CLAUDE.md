@@ -9,10 +9,10 @@
 `package.json` 只允许有 `name` / `private` / `type` 三个字段。不要装任何 npm 包 —— 测试用 Node 自带的 `node --test`，图标由 `tools/make-icons.mjs` 用 stdlib 的 `zlib` 生成。
 
 **纯函数边界 —— 这是整个测试套件成立的前提。**
-以下五个文件不得触碰时钟、随机数、DOM 或存储：
+以下六个文件不得触碰时钟、随机数、DOM 或存储：
 
 ```
-src/config.js  src/dates.js  src/observations.js  src/recommender.js  src/snapshot.js
+src/config.js  src/dates.js  src/emoji.js  src/observations.js  src/recommender.js  src/snapshot.js
 ```
 
 时间和随机源一律作为参数注入（`now`、`random`、`exportedAt`）。
@@ -59,7 +59,7 @@ node --test                    # 全部测试
 python -m http.server 8000     # 本地预览；ES modules 无法从 file:// 加载
 ```
 
-`src/store.js` 与 `src/ui-*.js` **没有自动化测试**：Node 没有 `indexedDB`，而引入 `fake-indexeddb` 会破坏零依赖约束。这条线是有意画在这里的，覆盖它们的是真机验收清单 `docs/acceptance-checklist.md`（2026-09-20，24/26）。改了 UI 就按清单里第 15 条「手机宽度布局」的规矩重验。新增验收项写进那份清单，不要写回 `README.md` —— README 只放使用说明。
+`src/store.js` 与 `src/ui-*.js` **没有自动化测试**：Node 没有 `indexedDB`，而引入 `fake-indexeddb` 会破坏零依赖约束。这条线是有意画在这里的，覆盖它们的是真机验收清单 `docs/acceptance-checklist.md`（2026-09-22，24/31，第 27–31 条与第 15、17 条重验待真机）。改了 UI 就按清单里第 15 条「手机宽度布局」的规矩重验。新增验收项写进那份清单，不要写回 `README.md` —— README 只放使用说明。
 
 ## 协作偏好
 
