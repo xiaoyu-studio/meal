@@ -1,9 +1,10 @@
-import { SLOT_LABELS, SLOTS } from './config.js';
+import { CAROUSEL_DOTS_MAX, POLAROID_CAPS, SLOT_LABELS, SLOTS } from './config.js';
 import { slotFromTime, localDateKey } from './dates.js';
 import { currentPick, feedbackCandidate, pendingFeedback, reduceObservations } from './observations.js';
 import { rankCandidates } from './recommender.js';
 import { loadAll, appendEvent, setHygiene } from './store.js';
 import { setShopLink, copyText } from './deeplink.js';
+import { dishEmoji } from './emoji.js';
 
 const el = (id) => document.getElementById(id);
 
@@ -148,6 +149,25 @@ async function renderFeedback(now = Date.now(), data = null) {
   }
 }
 
+/**
+ * 画轮播位置。候选不多时画小横杠，多了就退回「7 / 23」文字 ——
+ * 几十道菜的横杠会排到屏幕外（见 style.css 里 .carousel-pos 的注释）。
+ * 用 createElement 不用 innerHTML：这里没有用户数据，但保持全页一致。
+ */
+function renderPos(index, total) {
+  const box = el('carousel-pos');
+  box.textContent = '';
+  if (total > CAROUSEL_DOTS_MAX) {
+    box.textContent = `${index + 1} / ${total}`;
+    return;
+  }
+  for (let i = 0; i < total; i += 1) {
+    const bar = document.createElement('i');
+    if (i === index) bar.className = 'on';
+    box.appendChild(bar);
+  }
+}
+
 /** 把轮播的第 i 项画到卡片上。不写任何事件 —— 浏览是免费的。 */
 function showAt(index) {
   const row = state.ranked[index];
@@ -159,7 +179,13 @@ function showAt(index) {
   el('shop-name').textContent = shop.name;
   el('price').textContent = `约 ¥${row.dish.refPrice}`;
   el('reason').textContent = row.reason;
-  el('carousel-pos').textContent = `${index + 1} / ${state.ranked.length}`;
+  // 拍立得：emoji 按菜名猜，猜不着退回 🍽️；下面那行字跟着饭点走。
+  el('dish-emoji').textContent = dishEmoji(row.dish.name);
+  el('polaroid-cap').textContent = POLAROID_CAPS[state.slot] ?? '';
+  // 配色靠这个属性切换（css/style.css 的 [data-slot=...]）。从后台切回来
+  // 跨了饭点时 refreshIfStale 会重画，属性跟着更新。
+  document.body.dataset.slot = state.slot;
+  renderPos(index, state.ranked.length);
   // 每翻一张都要重挂 —— 换了菜就换了店，href 不跟着走就会跳到上一家。
   setShopLink(el('order'), shop.link);
   el('failure').hidden = true;
