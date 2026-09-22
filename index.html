@@ -14,22 +14,43 @@
 </head>
 <body>
 <main class="wrap">
-  <section id="card" class="card" hidden>
-    <div class="swap-row">
-      <button id="prev" class="swap" type="button">上一个</button>
-      <button id="swap" class="swap" type="button">下一个</button>
+  <section id="card" class="board" hidden>
+    <div class="peek far"></div>
+    <div class="peek"></div>
+    <div class="paper" id="paper">
+      <div class="note">
+        <div class="tape"></div>
+        <div class="polaroid">
+          <div class="pic" id="dish-emoji">🍽️</div>
+          <div class="cap" id="polaroid-cap"></div>
+        </div>
+        <div class="stickers" aria-hidden="true">
+          <span class="sk1">✨</span>
+          <span class="sk2">🔥</span>
+          <span class="sk3">⭐️</span>
+        </div>
+        <p id="slot-label" class="slot-label"></p>
+        <h1 id="dish-name" class="dish-name"></h1>
+        <div class="meta-row">
+          <p id="shop-name" class="shop-name"></p>
+          <p id="price" class="price"></p>
+        </div>
+        <p id="reason" class="reason"></p>
+        <!-- 必须是真实的 <a>，不能是 <button> + location.href：iOS 的 Universal
+             Links 唤不起脚本发起的跳转。href 由 showAt() 逐张卡片写入。 -->
+        <a id="order" class="primary">去下单</a>
+        <div class="ghost-row">
+          <button id="copy-shop" class="ghost" type="button">复制店名</button>
+          <button id="mute" class="ghost" type="button">别再推这个</button>
+        </div>
+        <div class="swap-row">
+          <button id="prev" class="swap" type="button"><i>←</i> 上一个</button>
+          <span class="swipe-hint">划一划换一个</span>
+          <button id="swap" class="swap" type="button">下一个 <i>→</i></button>
+        </div>
+        <p id="carousel-pos" class="carousel-pos"></p>
+      </div>
     </div>
-    <p id="slot-label" class="slot-label"></p>
-    <h1 id="dish-name" class="dish-name"></h1>
-    <p id="shop-name" class="shop-name"></p>
-    <p id="price" class="price"></p>
-    <p id="reason" class="reason"></p>
-    <p id="carousel-pos" class="carousel-pos"></p>
-    <!-- 必须是真实的 <a>，不能是 <button> + location.href：iOS 的 Universal
-         Links 唤不起脚本发起的跳转。href 由 showAt() 逐张卡片写入。 -->
-    <a id="order" class="primary">去下单</a>
-    <button id="copy-shop" class="ghost" type="button">复制店名</button>
-    <button id="mute" class="ghost" type="button">别再推这个</button>
   </section>
 
   <section id="empty" class="card" hidden>
