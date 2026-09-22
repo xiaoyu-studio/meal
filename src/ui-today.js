@@ -1,4 +1,4 @@
-import { CAROUSEL_DOTS_MAX, POLAROID_CAPS, SLOT_LABELS, SLOTS } from './config.js';
+import { CAROUSEL_DOTS_MAX, POLAROID_CAPS, SLOT_LABELS, SLOTS, SWIPE_RATIO } from './config.js';
 import { slotFromTime, localDateKey } from './dates.js';
 import { currentPick, feedbackCandidate, pendingFeedback, reduceObservations } from './observations.js';
 import { rankCandidates } from './recommender.js';
@@ -207,6 +207,44 @@ function step(delta) {
   showAt((((state.index + delta) % n) + n) % n);
 }
 
+const prefersReducedMotion = () =>
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+/**
+ * 翻一道并放动画：当前卡片往手指的方向飞出去，换内容，新的从反方向弹进来。
+ * 「减弱动态效果」开着时直接换，不放动画。
+ *
+ * 动画只碰 .paper 的 transform，不碰 .note —— 飘动在那一层。
+ */
+function animateStep(delta) {
+  if (state.ranked.length === 0) return;
+  const paper = el('paper');
+  if (prefersReducedMotion() || !paper.animate) {
+    paper.style.transform = '';
+    step(delta);
+    return;
+  }
+  const out = paper.animate(
+    [
+      { transform: paper.style.transform || 'translateX(0)', opacity: 1 },
+      { transform: `translateX(${delta > 0 ? -130 : 130}%) rotate(${delta > 0 ? -10 : 10}deg)`, opacity: 0 },
+    ],
+    { duration: 200, easing: 'ease-in' },
+  );
+  out.onfinish = () => {
+    step(delta);
+    // 必须清掉，否则下一张卡片会带着上一张的位移出场。
+    paper.style.transform = '';
+    paper.animate(
+      [
+        { transform: `translateX(${delta > 0 ? 120 : -120}%) rotate(${delta > 0 ? 8 : -8}deg)`, opacity: 0 },
+        { transform: 'translateX(0) rotate(0deg)', opacity: 1 },
+      ],
+      { duration: 380, easing: 'cubic-bezier(0.2, 1.2, 0.4, 1)' },
+    );
+  };
+}
+
 async function render(now = Date.now(), data = null) {
   try {
     const slot = resolveSlot(now);
@@ -325,38 +363,86 @@ el('order').addEventListener('click', () => {
 });
 
 el('swap').addEventListener('click', () => {
-  step(1);
+  animateStep(1);
 });
 
 // 手势能右划往回，按钮侧也得有 —— 桌面上没有手势，滑动不灵时也要绕一整圈。
 // 和翻页一样不写任何事件：浏览是免费的。
 el('prev').addEventListener('click', () => {
-  step(-1);
+  animateStep(-1);
 });
 
-// 左右滑动翻菜。阈值 50px，且横向位移必须明显大于纵向 ——
-// 否则用户想纵向滚页面时会被误判成翻菜。
-const SWIPE_MIN_X = 50;
-let touchStartX = null;
-let touchStartY = null;
+// 左右拖动翻菜，卡片跟着手指走。
+//
+// 轴向锁定是保住验收第 17 条（滑动不与纵向滚动打架）的关键：位移在任一方向
+// 都不到 AXIS_LOCK_PX 时什么都不做 —— 手指刚落下的抖动不该决定方向；第一次
+// 超过它时比较 |dx| 与 |dy| 定下轴向，之后不再改。
+//
+// .paper 上的 touch-action: pan-y 把纵向滚动留给浏览器，所以这里不需要
+// preventDefault，监听器可以保持 passive，不会让滚动一卡一卡。
+const AXIS_LOCK_PX = 6;
+const paper = el('paper');
+let drag = null;   // { x, y, dx, axis } —— 没在拖时是 null
 
-el('card').addEventListener('touchstart', (e) => {
-  const t = e.changedTouches[0];
-  touchStartX = t.clientX;
-  touchStartY = t.clientY;
+paper.addEventListener('pointerdown', (e) => {
+  // 在按钮或链接上起手不算拖卡片：否则在「去下单」上手指稍微一滑，
+  // 链接就点不动了。
+  if (e.target.closest('a, button')) return;
+  drag = { x: e.clientX, y: e.clientY, dx: 0, axis: null };
+  // 合成事件或奇怪的 pointerId 会抛，吞掉即可 —— 捕获不到只是拖到边缘
+  // 可能丢事件，不影响主路径。
+  try { paper.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+  paper.classList.add('held');
+});
+
+paper.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x;
+  const dy = e.clientY - drag.y;
+  if (drag.axis === null) {
+    if (Math.abs(dx) < AXIS_LOCK_PX && Math.abs(dy) < AXIS_LOCK_PX) return;
+    drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    if (drag.axis === 'y') { endDrag(e, true); return; }   // 让页面去滚
+  }
+  drag.dx = dx;
+  // 0.88 次幂：小位移几乎一比一跟手，拖得越远越沉。同时按位移的 1/26
+  // 轻微旋转 —— 纸被推着走会偏一点，正着平移反而假。
+  const damped = Math.sign(dx) * Math.abs(dx) ** 0.88;
+  paper.style.transform = `translateX(${damped}px) rotate(${damped / 26}deg)`;
 }, { passive: true });
 
-el('card').addEventListener('touchend', (e) => {
-  if (touchStartX === null) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - touchStartX;
-  const dy = t.clientY - touchStartY;
-  touchStartX = null;
-  touchStartY = null;
-  if (Math.abs(dx) < SWIPE_MIN_X) return;
-  if (Math.abs(dx) <= Math.abs(dy)) return;
-  step(dx < 0 ? 1 : -1);   // 左滑看下一道，右滑退回上一道
-}, { passive: true });
+function endDrag(e, cancel) {
+  if (!drag) return;
+  const { dx } = drag;
+  drag = null;
+  paper.classList.remove('held');
+  try { paper.releasePointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+
+  // 阈值按卡片宽度算，不用固定像素 —— 换个更宽的屏手感才一样。
+  if (!cancel && Math.abs(dx) > paper.offsetWidth * SWIPE_RATIO) {
+    animateStep(dx < 0 ? 1 : -1);   // 左拖看下一道，右拖退回上一道
+    return;
+  }
+  // 不够就弹回原位，带一点过冲。
+  if (!paper.style.transform) return;   // 根本没动过（比如纵向滑）
+  const from = paper.style.transform;
+  // 先清掉内联位移再放动画：动画播放期间盖在上面，播完自然落回原位。
+  // 不在 onfinish 里清 —— 那 0.3 秒里手指可能又按下开始新一次拖动，
+  // 到时 onfinish 会把新拖出来的位移抹掉。
+  paper.style.transform = '';
+  paper.animate?.(
+    [{ transform: from }, { transform: 'translateX(0) rotate(0deg)' }],
+    { duration: 300, easing: 'cubic-bezier(0.2, 1.4, 0.4, 1)' },
+  );
+}
+
+paper.addEventListener('pointerup', (e) => endDrag(e, false), { passive: true });
+paper.addEventListener('pointercancel', (e) => endDrag(e, true), { passive: true });
+
+// 按住「去下单」时整张纸的投影收紧（.pressed），松手复位。
+el('order').addEventListener('pointerdown', () => { paper.classList.add('pressed'); });
+window.addEventListener('pointerup', () => { paper.classList.remove('pressed'); });
+window.addEventListener('pointercancel', () => { paper.classList.remove('pressed'); });
 
 el('mute').addEventListener('click', async () => {
   const dish = state.dish;
@@ -378,7 +464,7 @@ el('mute').addEventListener('click', async () => {
   }
   // 排序已在加载时算定，这道菜本轮仍留在轮播里；静音下次加载才生效。
   // 但至少先把它翻过去，别让用户盯着一道刚被自己静音的菜。
-  step(1);
+  animateStep(1);
 });
 
 el('copy-shop').addEventListener('click', async () => {
