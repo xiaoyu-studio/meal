@@ -229,6 +229,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .toast { transition: none; }
   .shop-block { transition: none; }
+  /* 首页便签卡片：装饰性动画全停。跟手拖动不在此列 —— 关掉手势等于关掉
+     一个功能，那不是「减少动效」的意思。按钮按下的位移是操作反馈，也留着。
+     !important 是因为动画声明在文件后面，按源码顺序会盖过这里。 */
+  .note, .polaroid, .stickers span, #prev i, #swap i {
+    animation: none !important;
+  }
+  .note { transform: rotate(-1.6deg); }
+  .polaroid { transform: rotate(9deg); }
 }
 
 .io-row { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; }
@@ -534,3 +542,60 @@ body {
   transition: width 0.25s ease, background 0.25s ease;
 }
 .carousel-pos i.on { width: 26px; background: var(--accent); transform: rotate(-3deg); }
+
+/* ---- 动效 ----
+   飘动挂在 .note 上，不能挂到 .paper：那一层的 transform 归 JS。 */
+.note { animation: note-float 5s ease-in-out infinite; }
+@keyframes note-float {
+  0%, 100% { transform: rotate(-1.6deg) translateY(0); }
+  50%      { transform: rotate(-0.5deg) translateY(-5px); }
+}
+/* 手指按住时停住，跟手才不会边跟边飘。 */
+.paper.held .note { animation-play-state: paused; }
+/* 按「去下单」时纸的投影收紧，配合按钮下沉 —— 像真被按住了。 */
+.paper.pressed .note { box-shadow: 0 4px 10px rgb(20 10 30 / 0.4); }
+
+.polaroid { animation: polaroid-sway 4.2s ease-in-out infinite; }
+@keyframes polaroid-sway {
+  0%, 100% { transform: rotate(7deg); }
+  50%      { transform: rotate(11.5deg); }
+}
+
+.sk1 { animation: sticker-twinkle 2.4s ease-in-out infinite; }
+@keyframes sticker-twinkle {
+  0%, 100% { opacity: 0.35; transform: rotate(var(--r)) scale(0.85); }
+  50%      { opacity: 1;    transform: rotate(var(--r)) scale(1.12); }
+}
+.sk2 { animation: sticker-shiver 1.8s ease-in-out infinite; }
+@keyframes sticker-shiver {
+  0%, 100% { transform: rotate(var(--r)); }
+  25%      { transform: rotate(calc(var(--r) - 7deg)); }
+  75%      { transform: rotate(calc(var(--r) + 7deg)); }
+}
+
+/* 换卡时三张贴纸重新弹进来，靠 JS 加 .in 触发（showAt 末尾）。
+   .in 的规则会整条替换掉上面的 animation，所以弹完要把各自的循环接回来 ——
+   只写 sticker-pop 的话，✨ 和 🔥 弹一次就再也不动了。循环的延迟等于
+   弹入的延迟加时长，且不带 backwards，弹的时候不会跟它抢 transform。 */
+.sk1.in {
+  animation: sticker-pop 0.42s cubic-bezier(0.2, 1.5, 0.5, 1) 0.06s backwards,
+             sticker-twinkle 2.4s ease-in-out 0.48s infinite;
+}
+.sk2.in {
+  animation: sticker-pop 0.42s cubic-bezier(0.2, 1.5, 0.5, 1) 0.14s backwards,
+             sticker-shiver 1.8s ease-in-out 0.56s infinite;
+}
+.sk3.in { animation: sticker-pop 0.42s cubic-bezier(0.2, 1.5, 0.5, 1) 0.22s backwards; }
+@keyframes sticker-pop {
+  0%   { transform: scale(0) rotate(0deg); }
+  65%  { transform: scale(1.25) rotate(var(--r)); }
+  100% { transform: scale(1) rotate(var(--r)); }
+}
+
+/* 两个箭头各自朝自己那边推，错开半个周期，别同步。 */
+#prev i { animation: nudge-left 1.5s ease-in-out infinite; }
+#swap i { animation: nudge-right 1.5s ease-in-out infinite 0.75s; }
+@keyframes nudge-left  { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-3px); } }
+@keyframes nudge-right { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+
+.board .primary:active { transform: translateY(5px); box-shadow: 0 1px 0 #c23f78; }

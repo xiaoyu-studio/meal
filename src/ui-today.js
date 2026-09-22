@@ -191,6 +191,13 @@ function showAt(index) {
   el('failure').hidden = true;
   el('empty').hidden = true;
   el('card').hidden = false;
+  // 换一道菜就让三张贴纸重新弹进来。先摘掉再强制回流再挂上，否则
+  // 同名 class 不会重新触发动画。
+  for (const sticker of document.querySelectorAll('.stickers span')) {
+    sticker.classList.remove('in');
+    void sticker.offsetWidth;
+    sticker.classList.add('in');
+  }
 }
 
 /** 前后翻一道，首尾相接。取模两次是为了让负数也落回正区间。 */
