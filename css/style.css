@@ -356,18 +356,26 @@ body {
    后者要等脚本算出饭点才写得上，那之前 TabBar 会先落在错的位置再跳一下。
    data-slot 只管配色。候选池没有这个 class，照常滚。
 
-   **文档要比屏幕高 1 像素**：iOS 主屏 App 在页面**不能滚**时，报给页面的可用高度
-   有时会少一截；页面一旦能滚，报的就是对的。所以这一页虽然不让滚，也要让文档
-   多出 1px。候选池页同理，见文件末尾那条 min-height。
    真正不让滚靠的是 touch-action: none —— 浏览器根本不接纵向手势。
-   TabBar 和补问浮层两页都是 position: fixed —— 相对屏幕定死，不跟页面走。
-   这一页**不开透明状态栏**（理由见 index.html 那行注释），状态栏那一条由 iOS
-   按 theme-color / 页面底色涂，所以底色取渐变**顶端**的 --board-a，跟状态栏接得上。 */
+
+   **主屏 App 里高度只认 100lvh**：iOS 主屏 App 下 100%、100vh、100dvh 都比屏幕
+   短约一个状态栏（2026-09-23 真机截图：页面在离屏幕底边约 53pt 处就结束了，
+   下面那截只有底色），position: fixed 也贴着这条短了的底边摆 —— TabBar 因此被抬高。
+   只有 100lvh 是屏幕全高。所以主屏 App 模式下整页用 100lvh 撑满，TabBar 和补问
+   浮层改挂在 body（position: relative）上，不再 fixed。这一页不滚，挂在 body 上
+   就等于钉在屏幕上。候选池页内容长、能滚，fixed 在那边是对的，不动它。
+   Safari 标签页里没有这个问题，仍按 100% 算。
+   底色用渐变**底端**的 --board-b：万一哪台机器上还剩一截没盖住，也和渐变底部同色。 */
 html.app-today {
   height: calc(100% + 1px);
   overscroll-behavior: none;
   background: linear-gradient(160deg, var(--board-a), var(--board-b));
-  background-color: var(--board-a);
+  background-color: var(--board-b);
+}
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  html.app-today { height: 100lvh; }
+  html.app-today .tabbar,
+  html.app-today .overlay { position: absolute; }
 }
 html.app-today body {
   position: relative;
@@ -744,7 +752,8 @@ html.app-today .wrap {
   ::view-transition-new(*) { animation: none !important; }
 }
 
-/* 候选池页也要比屏幕高出 1 像素，理由同 html.app-today 那段：内容少到不能滚时，
-   iOS 主屏 App 会按偏短的高度摆放固定在底部的 TabBar，等数据加载出来、页面能滚了
-   才归位 —— 中间那一下就是「位置不对」。 */
+/* 候选池页也要比屏幕高出 1 像素：内容少到不能滚时，iOS 主屏 App 会按偏短的高度
+   摆放固定在底部的 TabBar，等数据加载出来、页面能滚了才归位 —— 中间那一下就是
+   「位置不对」。（翻牌子页后来查明是 100dvh 本身就短一截，见 html.app-today 那段；
+   这里用的也是 100dvh，数据加载前那一下可能仍然偏高，2026-09-23 待真机确认。） */
 html:not(.app-today) body { min-height: calc(100dvh + 1px); }
