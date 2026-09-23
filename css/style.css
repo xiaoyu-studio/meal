@@ -742,9 +742,33 @@ html.app-today .wrap {
    ============================================================ */
 @view-transition { navigation: auto; }
 
-::view-transition-old(root),
-::view-transition-new(root) { animation-duration: 0.22s; }
-::view-transition-group(tabbar) { animation-duration: 0.22s; }
+/* 整页、底部色带、TabBar 用同一条节奏。0.22s 在奶白和深紫之间换色太急，
+   看着像闪了一下；拉长一点、两头放缓，颜色是「漫」过去的。
+   新页面内容没画好之前动画停在第 0 帧，见 src/page-transition.js。 */
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 底部色带：iOS 主屏 App 拍整页快照只拍到偏短的高度（svh），屏幕最底下那一截
+   （lvh − svh，真机约 59pt）露的是新页面底色，切换一开始就瞬间变色。
+   这条带子正好盖在那一截上、颜色同页面底部，自己单独拍快照，跟整页一起淡入淡出。
+   平时不显示（visibility），只在切换期间由 page-transition.js 加上 .vt-on。
+   桌面和 Safari 标签页里 svh = lvh，高度是 0。 */
+.vt-band {
+  position: fixed;
+  left: 0; right: 0;
+  top: 100svh;
+  height: calc(100lvh - 100svh);
+  background: var(--bg);
+  pointer-events: none;
+  visibility: hidden;
+  view-transition-name: vt-band;
+}
+html.app-today .vt-band { background: var(--board-b); }
+html.vt-on .vt-band { visibility: visible; }
 
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*),

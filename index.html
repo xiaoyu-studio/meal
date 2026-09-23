@@ -18,18 +18,8 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="stylesheet" href="css/style.css">
-<script>
-// 页面切换的淡入淡出被打断时（比如还没播完又点了另一个标签），浏览器那条
-// Promise 没人接，控制台会报一条 AbortError。接住它，不然真机上排查别的
-// 问题时满屏都是这条。被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
-function hushTransition(e) {
-  if (!e.viewTransition) return;
-  e.viewTransition.ready.catch(function () {});
-  e.viewTransition.finished.catch(function () {});
-}
-window.addEventListener('pagereveal', hushTransition);
-window.addEventListener('pageswap', hushTransition);
-</script>
+<!-- 标签页切换的过渡控制。普通脚本、放 <head>：pagereveal 在第一帧之前触发。 -->
+<script src="src/page-transition.js"></script>
 </head>
 <body>
 <main class="wrap">
@@ -89,50 +79,14 @@ window.addEventListener('pageswap', hushTransition);
 
 <!-- 底部两个标签：翻牌子（选餐，这一页）/ 御膳房（候选池）。普通链接整页跳转，
      不做单页路由 —— 两页各有各的脚本，没有共享状态要保。 -->
+<!-- 切换页面时盖住屏幕最底下那截快照拍不到的地方，见 src/page-transition.js。 -->
+<div class="vt-band" aria-hidden="true"></div>
 <nav class="tabbar" aria-label="页面">
   <a class="tab on" href="index.html" aria-current="page"><span class="tab-ico">🎴</span><span class="tab-name">翻牌子</span></a>
   <a class="tab" href="pool.html"><span class="tab-ico">🍱</span><span class="tab-name">御膳房</span></a>
 </nav>
 
 <div id="feedback" class="overlay" hidden></div>
-
-<!-- 【临时】真机量高度用的角标，2026-09-23 加。TabBar 位置确认后整段删掉。
-     数字单位都是 pt（CSS px）。「底」是元素底边到屏幕顶的距离。 -->
-<div id="vp-debug" style="position:fixed;top:calc(env(safe-area-inset-top) + 2px);left:4px;z-index:999;
-  pointer-events:none;font:10px/1.35 ui-monospace,Menlo,monospace;color:#fff;background:rgba(0,0,0,.65);
-  padding:3px 5px;border-radius:4px;white-space:pre"></div>
-<script>
-(function () {
-  var box = document.getElementById('vp-debug');
-  function probe(css) {
-    var d = document.createElement('div');
-    d.style.cssText = 'position:absolute;top:0;left:-9999px;width:1px;visibility:hidden;' + css;
-    document.body.appendChild(d);
-    var r = d.getBoundingClientRect(), cs = getComputedStyle(d);
-    var out = { h: Math.round(r.height), pt: parseFloat(cs.paddingTop), pb: parseFloat(cs.paddingBottom) };
-    d.remove();
-    return out;
-  }
-  function show(tag) {
-    var sa = probe('height:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)');
-    var bar = document.querySelector('.tabbar').getBoundingClientRect();
-    var html = document.documentElement.getBoundingClientRect();
-    var sm = window.matchMedia('(display-mode: standalone)').matches;
-    box.textContent =
-      tag + (sm ? ' 主屏App' : ' 浏览器') + '\n' +
-      '屏幕 ' + screen.height + '  inner ' + innerHeight + '  client ' + document.documentElement.clientHeight + '\n' +
-      'vv ' + Math.round(visualViewport ? visualViewport.height : -1) +
-      '  lvh ' + probe('height:100lvh').h + '  dvh ' + probe('height:100dvh').h + '  svh ' + probe('height:100svh').h + '\n' +
-      '安全区 上' + sa.pt + ' 下' + sa.pb + '  html底 ' + Math.round(html.bottom) + '  bar底 ' + Math.round(bar.bottom) +
-      '  bar定位 ' + getComputedStyle(document.querySelector('.tabbar')).position;
-  }
-  addEventListener('load', function () {
-    show('载入');
-    setTimeout(function () { show('1秒后'); }, 1000);
-  });
-  addEventListener('resize', function () { show('变化后'); });
-})();
-</script>
 
 <script type="module" src="src/ui-today.js"></script>
 </body>

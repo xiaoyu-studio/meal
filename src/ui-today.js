@@ -628,6 +628,8 @@ async function renderAll(now = Date.now()) {
 // 会一个按早餐算、一个按午餐算。评分后重渲染与「重试」照旧各取当下时刻。
 const startedAt = Date.now();
 await renderAll(startedAt);
+// 卡片画好了，从候选池切过来的那段过渡可以开始淡入（src/page-transition.js）。
+window.markPageReady?.();
 
 // iOS 主屏 App 从后台切回来常常不重新加载页面，卡片会停在切走时那一顿 ——
 // 昨晚的卡片今早点下单，这一单就记到了昨天晚餐上。回到前台时查一次时钟：

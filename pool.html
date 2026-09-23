@@ -10,18 +10,8 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="stylesheet" href="css/style.css">
-<script>
-// 同 index.html 末尾那两行：页面切换的淡入淡出被打断时接住那条 Promise，
-// 否则控制台会多一条 AbortError。
-function hushTransition(e) {
-  // 被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
-  if (!e.viewTransition) return;
-  e.viewTransition.ready.catch(function () {});
-  e.viewTransition.finished.catch(function () {});
-}
-window.addEventListener('pagereveal', hushTransition);
-window.addEventListener('pageswap', hushTransition);
-</script>
+<!-- 标签页切换的过渡控制，同 index.html。 -->
+<script src="src/page-transition.js"></script>
 </head>
 <body>
 <main class="wrap has-tabbar">
@@ -61,6 +51,7 @@ window.addEventListener('pageswap', hushTransition);
   <div id="shops"></div>
 </main>
 
+<div class="vt-band" aria-hidden="true"></div>
 <nav class="tabbar" aria-label="页面">
   <a class="tab" href="index.html"><span class="tab-ico">🎴</span><span class="tab-name">翻牌子</span></a>
   <a class="tab on" href="pool.html" aria-current="page"><span class="tab-ico">🍱</span><span class="tab-name">御膳房</span></a>

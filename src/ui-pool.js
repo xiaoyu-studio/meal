@@ -452,3 +452,5 @@ el('retry').addEventListener('click', () => {
 });
 
 await render();
+// 店铺列表画好了，从翻牌子切过来的那段过渡可以开始淡入（src/page-transition.js）。
+window.markPageReady?.();
