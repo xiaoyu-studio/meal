@@ -6,6 +6,14 @@ const STORES = ['shops', 'dishes', 'events'];
 
 let dbPromise = null;
 
+// 这一页打开以来发起过几次写入。翻牌子和御膳房在同一页里各自渲染，
+// 切到自己时拿它和上次渲染时记下的值比 —— 对方改过数据才重读，没改过就不动
+// （翻牌子不重读，卡片才能停在原来那道菜上）。只增不减，不存盘。
+let writes = 0;
+export function writeCount() {
+  return writes;
+}
+
 /**
  * 注意：这里没有 onblocked 处理器。DB_VERSION 恒为 1 时不会触发它 ——
  * 但**任何一次 DB_VERSION 升版前必须先补上**：只要还有一个旧标签页开着
@@ -34,6 +42,7 @@ function openDB() {
 }
 
 function run(store, mode, fn) {
+  if (mode === 'readwrite') writes += 1;
   return openDB().then(
     (db) =>
       new Promise((resolve, reject) => {
@@ -110,6 +119,7 @@ export async function exportSnapshot() {
 export async function importSnapshot(obj) {
   const data = fromSnapshot(obj);
   const db = await openDB();
+  writes += 1;
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORES, 'readwrite');
     tx.onerror = () => reject(tx.error);

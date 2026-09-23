@@ -81,8 +81,11 @@ body {
   cursor: pointer;
 }
 
+/* 浮层、toast、TabBar 都挂在 body 上（absolute），不用 fixed：iOS 主屏 App 里
+   fixed 贴的是一条偏短的底边，见下面「整屏布局」那段。整个文档从不滚动，
+   挂在 body 上就等于钉在屏幕上。 */
 .overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 50;   /* 盖过 TabBar（40），低于 toast（100） */
   background: rgba(0, 0, 0, 0.45);
@@ -92,6 +95,10 @@ body {
 }
 
 .overlay[hidden] { display: none; }
+/* 补问上一顿的浮层属于翻牌子：在御膳房、以及切换途中都不显示，
+   回到翻牌子才出来（问题还在，没答就一直在）。 */
+html[data-view="pool"] #feedback,
+html.switching #feedback { display: none; }
 
 .sheet {
   width: 100%;
@@ -192,7 +199,7 @@ body {
 /* 操作成功的即时反馈。#io-msg 那行小灰字在页面顶部，用户在下面删店时
    根本看不见 —— 这个固定在屏幕底部，无论滚到哪儿都会跳出来。 */
 .toast {
-  position: fixed;
+  position: absolute;
   /* 左右都定住再用 margin 居中，不要 left:50% + translateX(-50%)：
      那种写法下收缩包裹的可用宽度只从中线算到右边缘，等于只剩半屏，
      长一点的店名会被挤成又窄又高的一坨。 */
@@ -215,7 +222,7 @@ body {
   transition: opacity 0.3s ease;
 }
 .toast-show { opacity: 1; }
-/* position: fixed 不改 display，[hidden] 本来就生效；写出来是为了跟
+/* position 不改 display，[hidden] 本来就生效；写出来是为了跟
    .overlay / .form / .io-row 保持一致，免得以后有人给它加 display 踩坑。 */
 .toast[hidden] { display: none; }
 
@@ -347,50 +354,71 @@ body {
   [data-slot="dinner"]    { --board-a: #241a33; --board-b: #14101d; --chip-bg: #3a2d55; --chip-fg: #d9c8ff; }
 }
 
-/* ---- 整页：一屏，不滚动 ----
-   饭点颜色铺满屏幕，写在 <html> 上（不是 body）：html 的背景就是整张画布。
-   页面锁死在一屏高、不许上下滚 —— 以前能滚，渐变按文档高度铺，
-   回弹拉出来的那一截是另一个颜色，中间有一道分界线。
-   touch-action: none 把所有手势交给 JS：纵向没东西可滚，横向是翻牌子。
-   挂在 html.app-today 上（index.html 写死的 class），不挂 data-slot ——
-   后者要等脚本算出饭点才写得上，那之前 TabBar 会先落在错的位置再跳一下。
-   data-slot 只管配色。候选池没有这个 class，照常滚。
-
-   真正不让滚靠的是 touch-action: none —— 浏览器根本不接纵向手势。
+/* ---- 整屏布局 ----
+   整个 App 是一页、一屏，文档本身从不滚动。翻牌子和御膳房是叠在一起的两个
+   全屏视图（.view），同一时刻只显示一个，由 <html data-view> 决定；
+   切换时两个都显示，由 src/ui-tabs.js 放动画。能滚的只有御膳房视图自己。
 
    **主屏 App 里高度只认 100lvh**：iOS 主屏 App 下 100%、100vh、100dvh 都比屏幕
-   短约一个状态栏（2026-09-23 真机截图：页面在离屏幕底边约 53pt 处就结束了，
-   下面那截只有底色），position: fixed 也贴着这条短了的底边摆 —— TabBar 因此被抬高。
-   只有 100lvh 是屏幕全高。所以主屏 App 模式下整页用 100lvh 撑满，TabBar 和补问
-   浮层改挂在 body（position: relative）上，不再 fixed。这一页不滚，挂在 body 上
-   就等于钉在屏幕上。候选池页内容长、能滚，fixed 在那边是对的，不动它。
-   Safari 标签页里没有这个问题，仍按 100% 算。
-   底色用渐变**底端**的 --board-b：万一哪台机器上还剩一截没盖住，也和渐变底部同色。 */
-html.app-today {
-  height: calc(100% + 1px);
-  overscroll-behavior: none;
-  background: linear-gradient(160deg, var(--board-a), var(--board-b));
-  background-color: var(--board-b);
-}
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  html.app-today { height: 100lvh; }
-  html.app-today .tabbar,
-  html.app-today .overlay { position: absolute; }
-}
-html.app-today body {
-  position: relative;
+   短约一个状态栏（2026-09-23 真机：页面在离屏幕底边约 53pt 处就结束了，下面那截
+   只有底色），position: fixed 也贴着这条短了的底边摆 —— TabBar 因此被抬高。
+   只有 100lvh 是屏幕全高。所以主屏 App 模式下整页用 100lvh 撑满，TabBar、浮层、
+   toast 都挂在 body（position: relative）上。Safari 标签页里没有这个问题，按 100% 算。 */
+html.app {
   height: 100%;
   overscroll-behavior: none;
+  background-color: var(--bg);
+}
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  html.app { height: 100lvh; }
+}
+html.app body {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding: 0;
   background: transparent;
-  touch-action: none;
-  display: flex;
-  flex-direction: column;
 }
 
-/* 卡片拖出屏幕、翻页时飞出去，会把页面撑宽。横向裁掉，用 clip 不用 hidden：
+/* 两个视图各自铺满整屏、各带背景，状态栏后面那一截也是自己的颜色。
+   不显示的那个用 visibility 藏（不是 display: none）：御膳房滚到哪儿，切回来还在哪儿。
+   切换期间（html.switching）两个都显示，正在离开的那个（.leaving）盖在上面淡出。 */
+.view {
+  position: absolute;
+  inset: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  visibility: hidden;
+}
+html[data-view="today"] .view-today,
+html[data-view="pool"] .view-pool,
+html.switching .view { visibility: visible; }
+.view.leaving { z-index: 1; }
+
+/* 翻牌子：饭点颜色铺满，不滚动。以前能滚，渐变按文档高度铺，回弹拉出来的
+   那一截是另一个颜色，中间有一道分界线。touch-action: none 把所有手势交给 JS：
+   纵向没东西可滚，横向是翻牌子。 */
+.view-today {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, var(--board-a), var(--board-b));
+  background-color: var(--board-b);
+  touch-action: none;
+}
+
+/* 御膳房：普通的上下滚动页面，自己就是滚动容器。contain 让滚到头的回弹
+   只发生在这一层，不带着整个文档（和 TabBar）一起晃。 */
+.view-pool {
+  background: var(--bg);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 卡片拖出屏幕、翻页时飞出去，会把视图撑宽。横向裁掉，用 clip 不用 hidden：
    clip 不会变成滚动容器。拍立得和贴纸伸出纸边的距离在内边距里，裁不到。
    底部内边距给固定在下面的 TabBar 让位。 */
-html.app-today .wrap {
+.view-today > .wrap {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -665,11 +693,13 @@ html.app-today .wrap {
 /* ============================================================
    底部 TabBar：翻牌子 / 御膳房
    浮在底部的一条便签纸：圆角、格子纸纹、左上角贴一小段胶带。
-   当前那一页的标签是一块歪着的彩色贴片，图标轻轻上下晃。
-   颜色用便签那套变量，两页都能用 —— 候选池没有 data-slot，取默认那套。
+   当前那个标签底下垫着一块歪着的彩色贴片（.tab-pill），图标轻轻上下晃；
+   切换时贴片滑到另一个标签底下。哪个是当前的只看 <html data-view>，
+   不靠脚本加 class —— 首帧就摆对。
+   颜色用便签那套变量，跟着饭点变，两个视图下一样。
    ============================================================ */
 .tabbar {
-  position: fixed;
+  position: absolute;
   left: 0; right: 0;
   bottom: calc(env(safe-area-inset-bottom) + 10px);
   z-index: 40;
@@ -687,13 +717,7 @@ html.app-today .wrap {
   box-shadow: 0 10px 26px rgb(20 10 30 / 0.3);
   transform: rotate(-0.8deg);
   touch-action: manipulation;
-  /* 切换页面时把它从整页快照里摘出来单独处理：两页的 TabBar 同名，
-     浏览器认定是同一个东西，位置又一样，于是切换过程中它稳稳不动，
-     只有内容在交叉淡入 —— 这是原生标签栏的感觉。 */
-  view-transition-name: tabbar;
 }
-/* 当前这一页的标签点了也不跳：原生标签栏点当前页不会整页重载。 */
-.tab.on { pointer-events: none; }
 .tabbar::before {
   content: "";
   position: absolute;
@@ -702,7 +726,21 @@ html.app-today .wrap {
   background: var(--tape);
   transform: rotate(-8deg);
 }
+/* 贴片宽度 = 一个标签宽：TabBar 内边距 0.35rem × 2、两个标签之间 0.4rem。
+   滑到右边那个标签 = 平移「自身宽度 + 间距」。带一点过冲，像被拨过去的。 */
+.tab-pill {
+  position: absolute;
+  top: 0.35rem; bottom: 0.35rem; left: 0.35rem;
+  width: calc((100% - 0.7rem - 0.4rem) / 2);
+  border-radius: 999px;
+  background: var(--chip-bg);
+  box-shadow: 0 3px 0 rgb(20 10 30 / 0.12);
+  transform: translateX(0) rotate(-2deg);
+  transition: transform 0.34s cubic-bezier(0.3, 1.25, 0.5, 1);
+}
+html[data-view="pool"] .tab-pill { transform: translateX(calc(100% + 0.4rem)) rotate(-2deg); }
 .tab {
+  position: relative;   /* 压在贴片上面 */
   flex: 1;
   display: flex;
   align-items: center;
@@ -715,69 +753,27 @@ html.app-today .wrap {
   font-size: 0.95rem;
   font-weight: 700;
   -webkit-tap-highlight-color: transparent;
+  transition: color 0.25s ease;
 }
 .tab-ico { font-size: 1.35rem; display: inline-block; transition: transform 0.12s ease; }
 .tab:active .tab-ico { transform: scale(0.8) rotate(-12deg); }
-.tab.on {
-  background: var(--chip-bg);
+/* 当前那个标签：字换成贴片上的颜色，图标晃；点了也没反应（原生标签栏点当前页不动）。 */
+html[data-view="today"] .tab[data-tab="today"],
+html[data-view="pool"] .tab[data-tab="pool"] {
   color: var(--chip-fg);
-  transform: rotate(-2deg);
-  box-shadow: 0 3px 0 rgb(20 10 30 / 0.12);
+  pointer-events: none;
 }
-.tab.on .tab-ico { animation: tab-bob 2.2s ease-in-out infinite; }
+html[data-view="today"] .tab[data-tab="today"] .tab-ico,
+html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s ease-in-out infinite; }
 @keyframes tab-bob {
   0%, 100% { transform: translateY(0) rotate(0deg); }
   50%      { transform: translateY(-3px) rotate(-10deg); }
 }
 
-/* 候选池那页照常滚动，底部留出 TabBar 的位置，最后一家店不被挡住。 */
+/* 御膳房底部留出 TabBar 的位置，最后一家店不被挡住。 */
 .has-tabbar { padding-bottom: calc(var(--tabbar-h) + 2.5rem + env(safe-area-inset-bottom)); }
 .page-sub { font-size: 0.8rem; font-weight: 400; color: var(--muted); margin-left: 0.3rem; }
 
-/* ============================================================
-   两个标签之间的切换
-   浏览器自己在新旧两页之间做交叉淡入（跨文档视图过渡），不用改成单页应用。
-   TabBar 已经用 view-transition-name 摘出来单独处理，切换时不动。
-   Safari 18.2 起支持；不支持的版本忽略这段，还是原来的整页跳转。
-   ============================================================ */
-@view-transition { navigation: auto; }
-
-/* 整页、底部色带、TabBar 用同一条节奏。0.22s 在奶白和深紫之间换色太急，
-   看着像闪了一下；拉长一点、两头放缓，颜色是「漫」过去的。
-   新页面内容没画好之前动画停在第 0 帧，见 src/page-transition.js。 */
-::view-transition-group(*),
-::view-transition-old(*),
-::view-transition-new(*) {
-  animation-duration: 0.34s;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* 底部色带：iOS 主屏 App 拍整页快照只拍到偏短的高度（svh），屏幕最底下那一截
-   （lvh − svh，真机约 59pt）露的是新页面底色，切换一开始就瞬间变色。
-   这条带子正好盖在那一截上、颜色同页面底部，自己单独拍快照，跟整页一起淡入淡出。
-   平时不显示（visibility），只在切换期间由 page-transition.js 加上 .vt-on。
-   桌面和 Safari 标签页里 svh = lvh，高度是 0。 */
-.vt-band {
-  position: fixed;
-  left: 0; right: 0;
-  top: 100svh;
-  height: calc(100lvh - 100svh);
-  background: var(--bg);
-  pointer-events: none;
-  visibility: hidden;
-  view-transition-name: vt-band;
-}
-html.app-today .vt-band { background: var(--board-b); }
-html.vt-on .vt-band { visibility: visible; }
-
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) { animation: none !important; }
+  .tab-pill, .tab { transition: none; }
 }
-
-/* 候选池页也要比屏幕高出 1 像素：内容少到不能滚时，iOS 主屏 App 会按偏短的高度
-   摆放固定在底部的 TabBar，等数据加载出来、页面能滚了才归位 —— 中间那一下就是
-   「位置不对」。（翻牌子页后来查明是 100dvh 本身就短一截，见 html.app-today 那段；
-   这里用的也是 100dvh，数据加载前那一下可能仍然偏高，2026-09-23 待真机确认。） */
-html:not(.app-today) body { min-height: calc(100dvh + 1px); }

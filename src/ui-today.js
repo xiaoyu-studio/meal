@@ -2,28 +2,30 @@ import { CAROUSEL_DOTS_MAX, POLAROID_CAPS, SLOT_LABELS, SLOTS, SWIPE_RATIO } fro
 import { slotFromTime, localDateKey } from './dates.js';
 import { currentPick, feedbackCandidate, pendingFeedback, reduceObservations } from './observations.js';
 import { rankCandidates } from './recommender.js';
-import { loadAll, appendEvent, setHygiene } from './store.js';
+import { loadAll, appendEvent, setHygiene, writeCount } from './store.js';
 import { setShopLink, copyText } from './deeplink.js';
 import { dishEmoji } from './emoji.js';
+import { currentView, paintStatusBar } from './ui-tabs.js';
 
 const el = (id) => document.getElementById(id);
 
-/** 整页底色跟着饭点走（css/style.css 的 html[data-slot]），写在 <html> 上：它的背景
-    就是整张画布。状态栏那一条由 iOS 涂色，同时写 theme-color 告诉它用渐变顶端那个颜色 ——
-    这一页用的是普通状态栏（透明状态栏会把页面底边抬高一截，见 index.html）。 */
+/** 底色跟着饭点走（css/style.css 的 [data-slot]），写在 <html> 上：TabBar 的高亮色
+    也取这套变量，两个视图都用得到。状态栏颜色跟着重写（ui-tabs.js）。 */
 function paintSlot(slot) {
-  const root = document.documentElement;
-  root.dataset.slot = slot;
-  const top = getComputedStyle(root).getPropertyValue('--board-a').trim();
-  if (top) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', top);
+  document.documentElement.dataset.slot = slot;
+  paintStatusBar();
 }
 
-/** 配色尽早定下来：这一步不读库，只看时钟，所以能在第一帧之前写上。
+/** 配色尽早定下来：这一步不读库，只看时钟。
     render() 之后还会再写一次（跨饭点重画时要更新）。 */
 paintSlot(resolveSlot(Date.now()));
-// 系统深浅色切换时 --board-a 会变，theme-color 跟着重写。
-window.matchMedia?.('(prefers-color-scheme: dark)')
-  .addEventListener?.('change', () => paintSlot(document.documentElement.dataset.slot));
+
+// 上次渲染（或自己写库）之后库里写到第几次了（store.js 的 writeCount）。
+// 切回翻牌子时拿它比：御膳房那边改过数据才重读重画，没改过就不动 ——
+// 卡片停在原来那道菜上，轮播位置也不丢。自己写的（静音、下单、填价）
+// 也记上：那些不该让卡片跳回开场那道。
+let seenWrites = -1;
+const markSeen = () => { seenWrites = writeCount(); };
 
 /** slot 优先取 URL 参数（快捷指令会带上），缺失或非法时按当前时间推断。 */
 function resolveSlot(now) {
@@ -149,6 +151,7 @@ async function renderFeedback(now = Date.now(), data = null) {
             slot: target.slot, dishId: target.dishId, targetTs: target.ts,
             type: 'paid', value: amount,
           });
+          markSeen();
           overlay.querySelector('.fb-price-box').hidden = true;
           // 写成功才说成功：appendEvent 抛异常会被下面的 catch 接走并关掉浮层。
           msg.textContent = `已记下实付 ¥${amount}`;
@@ -362,6 +365,7 @@ async function render(now = Date.now(), data = null) {
       el('failure').hidden = true;
       el('card').hidden = true;
       el('empty').hidden = false;
+      markSeen();
       return;
     }
 
@@ -404,6 +408,7 @@ async function render(now = Date.now(), data = null) {
       recordedDishId: ranked[index].dish.id,
     };
     showAt(index);
+    markSeen();
   } catch (err) {
     showFailure(err);
   }
@@ -438,6 +443,7 @@ async function recordOrder({ slot, dateKey, dish, ranked, index, recordedDishId 
     // 记录失败不该拦住下单 —— 日志是记账，不是门槛。
     console.error('记录「去下单」事件失败', err);
   }
+  markSeen();
 }
 
 // 不 preventDefault，也不 await：跳转交给 <a href> 的默认行为完成，那是
@@ -475,12 +481,12 @@ el('prev').addEventListener('click', () => {
 //
 // 轴向锁定：位移在任一方向都不到 AXIS_LOCK_PX 时什么都不做 —— 手指刚落下的
 // 抖动不该决定方向；第一次超过它时比较 |dx| 与 |dy| 定下轴向，之后不再改。
-// 纵向就当没拖（这一页不滚动，见 style.css 的 html[data-slot]）。
+// 纵向就当没拖（翻牌子视图不滚动，见 style.css 的 .view-today）。
 //
 // 指针捕获要等锁定为横向之后才设：一按下就捕获的话，原地点按钮时 click 会
 // 被派发到 body 上，按钮就点不动了。
 //
-// 这一页 touch-action: none，浏览器不抢手势，监听器保持 passive 即可。
+// 翻牌子视图 touch-action: none，浏览器不抢手势，监听器保持 passive 即可。
 const AXIS_LOCK_PX = 6;
 const paper = el('paper');
 const stack = paper.parentElement;
@@ -498,7 +504,9 @@ document.addEventListener('click', (e) => {
 document.body.addEventListener('pointerdown', (e) => {
   swallowClick = false;
   if (drag || flipping || el('card').hidden) return;
-  if (e.target.closest('.tabbar, #feedback')) return;
+  // 只在翻牌子视图里翻：御膳房那边是正常的上下滚动页面，横着划不该翻牌。
+  if (currentView() !== 'today') return;
+  if (e.target.closest('.tabbar, #feedback, .view-pool')) return;
   // 弹回还没播完就又按下了：掐掉它，否则它盖着新拖出来的位移，播完才「啪」地跳出来。
   bounce?.cancel();
   bounce = null;
@@ -572,6 +580,7 @@ el('mute').addEventListener('click', async () => {
   if (!dish) return;
   try {
     await appendEvent({ slot: state.slot, dishId: dish.id, type: 'muted' });
+    markSeen();
   } catch (err) {
     // 这个按钮的全部意义就是让它持久生效，所以写失败必须让用户看见 ——
     // 手机上没有控制台可看。也不要翻页：卡片一动，用户就会以为记下了。
@@ -628,8 +637,6 @@ async function renderAll(now = Date.now()) {
 // 会一个按早餐算、一个按午餐算。评分后重渲染与「重试」照旧各取当下时刻。
 const startedAt = Date.now();
 await renderAll(startedAt);
-// 卡片画好了，从候选池切过来的那段过渡可以开始淡入（src/page-transition.js）。
-window.markPageReady?.();
 
 // iOS 主屏 App 从后台切回来常常不重新加载页面，卡片会停在切走时那一顿 ——
 // 昨晚的卡片今早点下单，这一单就记到了昨天晚餐上。回到前台时查一次时钟：
@@ -653,3 +660,14 @@ async function refreshIfStale() {
 
 document.addEventListener('visibilitychange', refreshIfStale);
 window.addEventListener('pageshow', (e) => { if (e.persisted) refreshIfStale(); });
+
+// 从御膳房切回来之前（ui-tabs.js 等这个 Promise 再放切换动画）：
+// 那边改过数据（加菜、删店、改卫生、导入）就整页重读重画 —— 候选变了；
+// 没改过就只查一次时钟，和从后台回来一样。
+document.addEventListener('viewwillshow', (e) => {
+  if (e.detail.view !== 'today') return;
+  if (writeCount() === seenWrites) { e.detail.waitUntil(refreshIfStale()); return; }
+  el('feedback').hidden = true;
+  el('feedback').innerHTML = '';
+  e.detail.waitUntil(renderAll(Date.now()));
+});

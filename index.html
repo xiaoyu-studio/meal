@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-<!-- app-today：这一页的整页布局（锁一屏、TabBar 贴底）挂在这个 class 上，
-     不挂 data-slot —— 后者要等脚本算出饭点才写得上，在那之前 TabBar 会先落在
-     错的位置再跳一下。data-slot 只管配色。 -->
-<html lang="zh-CN" class="app-today">
+<!-- 整个 App 就这一页：翻牌子（选餐）和御膳房（候选池）是叠在一起的两个视图，
+     底部 TabBar 在两者之间切换（src/ui-tabs.js）。class="app" 挂整屏布局；
+     data-view 由下面 <head> 里那行脚本按地址里的 #pool 定，首帧就显示对的视图。
+     data-slot 只管配色，由 ui-today.js 算出饭点后写。 -->
+<html lang="zh-CN" class="app" data-view="today">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- 不要加 apple-mobile-web-app-status-bar-style=black-translucent：主屏 App 开了透明
-     状态栏，页面顶边会延伸到状态栏后面，底边却不跟着往下，固定在底部的 TabBar
-     被整体抬高约一个状态栏（2026-09-23 真机录屏实测约 50pt，和候选池页对不齐）。
-     状态栏用普通样式，颜色由下面的 theme-color 给，ui-today.js 按饭点和深浅色改写。 -->
+<!-- 状态栏用普通样式，颜色由 theme-color 给：翻牌子是饭点色、御膳房是页面底色，
+     ui-tabs.js 按视图、饭点和深浅色改写（2026-09-23 真机：紫底白字，接得上）。 -->
 <meta name="theme-color" content="#3b2a52">
 <title>今天这顿</title>
 <link rel="manifest" href="manifest.json">
@@ -18,10 +17,15 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="stylesheet" href="css/style.css">
-<!-- 标签页切换的过渡控制。普通脚本、放 <head>：pagereveal 在第一帧之前触发。 -->
-<script src="src/page-transition.js"></script>
+<script>
+  // 先定显示哪个视图，赶在第一帧之前 —— 模块脚本要等整页解析完才跑。
+  if (location.hash === '#pool') document.documentElement.dataset.view = 'pool';
+</script>
 </head>
 <body>
+
+<!-- ============ 翻牌子 ============ -->
+<section id="view-today" class="view view-today" aria-label="翻牌子">
 <main class="wrap">
   <section id="card" class="board" hidden>
     <div class="stack">
@@ -67,27 +71,69 @@
 
   <section id="empty" class="card" hidden>
     <p class="empty-text">候选池里这一顿没有可推的。</p>
-    <a class="primary" href="pool.html">去添加菜品</a>
+    <a class="primary" href="index.html#pool" data-tab="pool">去添加菜品</a>
   </section>
 
   <section id="failure" class="card" hidden>
     <p class="empty-text" id="failure-text"></p>
     <button id="retry" class="primary" type="button">重试</button>
   </section>
-
 </main>
+</section>
 
-<!-- 底部两个标签：翻牌子（选餐，这一页）/ 御膳房（候选池）。普通链接整页跳转，
-     不做单页路由 —— 两页各有各的脚本，没有共享状态要保。 -->
-<!-- 切换页面时盖住屏幕最底下那截快照拍不到的地方，见 src/page-transition.js。 -->
-<div class="vt-band" aria-hidden="true"></div>
+<!-- ============ 御膳房 ============
+     id 带 pool- 前缀的是和翻牌子重名、改过名的（失败态那三个）。 -->
+<section id="view-pool" class="view view-pool" aria-label="御膳房">
+<div class="wrap has-tabbar">
+  <h2 class="page-title">御膳房 <span class="page-sub">候选池</span></h2>
+
+  <div id="io-row" class="io-row">
+    <button id="export" class="ghost" type="button">导出备份</button>
+    <label class="ghost import-label">
+      导入备份
+      <input id="import" type="file" accept="application/json" hidden>
+    </label>
+  </div>
+  <p id="io-msg" class="io-msg"></p>
+
+  <form id="shop-form" class="form">
+    <h3 class="form-title">加一家店</h3>
+    <input name="name" placeholder="店名" required>
+    <select name="platform">
+      <option value="meituan">美团外卖</option>
+      <option value="eleme">淘宝闪购（原饿了么）</option>
+    </select>
+    <input name="link" type="url" placeholder="从外卖 App 分享出来的链接" required>
+    <select name="hygiene">
+      <option value="unknown">卫生：未知</option>
+      <option value="trusted">卫生：放心</option>
+      <option value="blocked">卫生：拉黑</option>
+    </select>
+    <p id="shop-msg" class="io-msg"></p>
+    <button class="primary" type="submit">保存店铺</button>
+  </form>
+
+  <section id="pool-failure" class="card" hidden>
+    <p class="empty-text" id="pool-failure-text"></p>
+    <button id="pool-retry" class="primary" type="button">重试</button>
+  </section>
+
+  <div id="shops"></div>
+</div>
+</section>
+
+<!-- 底部两个标签。真链接：脚本没加载时照样能跳；加载了由 ui-tabs.js 接管，
+     页内切换、不重载。高亮的那块底色是 .tab-pill，切换时滑过去。 -->
 <nav class="tabbar" aria-label="页面">
-  <a class="tab on" href="index.html" aria-current="page"><span class="tab-ico">🎴</span><span class="tab-name">翻牌子</span></a>
-  <a class="tab" href="pool.html"><span class="tab-ico">🍱</span><span class="tab-name">御膳房</span></a>
+  <span class="tab-pill" aria-hidden="true"></span>
+  <a class="tab" data-tab="today" href="index.html"><span class="tab-ico">🎴</span><span class="tab-name">翻牌子</span></a>
+  <a class="tab" data-tab="pool" href="index.html#pool"><span class="tab-ico">🍱</span><span class="tab-name">御膳房</span></a>
 </nav>
 
 <div id="feedback" class="overlay" hidden></div>
+<div id="toast" class="toast" hidden></div>
 
 <script type="module" src="src/ui-today.js"></script>
+<script type="module" src="src/ui-pool.js"></script>
 </body>
 </html>

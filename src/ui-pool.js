@@ -5,8 +5,9 @@ import { snapshotFilename } from './snapshot.js';
 import { isSafeLink } from './deeplink.js';
 import {
   loadAll, putShop, putDish, deleteShop, deleteDish, setHygiene,
-  newId, exportSnapshot, importSnapshot, appendEvent,
+  newId, exportSnapshot, importSnapshot, appendEvent, writeCount,
 } from './store.js';
+import './ui-tabs.js';
 
 const el = (id) => document.getElementById(id);
 /**
@@ -113,13 +114,18 @@ function showFailure(err) {
   console.error('渲染候选池失败', err);
   el('shops').innerHTML = '';
   setControlsHidden(true);
-  el('failure-text').textContent = '本地存储读取失败，请稍后重试。';
-  el('failure').hidden = false;
+  el('pool-failure-text').textContent = '本地存储读取失败，请稍后重试。';
+  el('pool-failure').hidden = false;
 }
+
+// 上次画列表时库里写到第几次了（store.js 的 writeCount）。切回御膳房时拿它比，
+// 翻牌子那边写过东西（静音、评价、下单……）才重画。
+let seenWrites = -1;
 
 async function render() {
   try {
     const now = Date.now();
+    const writesAtRead = writeCount();
     const { shops, dishes, events } = await loadAll();
     const observations = reduceObservations(events);
 
@@ -225,8 +231,9 @@ async function render() {
       })
       .join('');
 
-    el('failure').hidden = true;
+    el('pool-failure').hidden = true;
     setControlsHidden(false);
+    seenWrites = writesAtRead;
   } catch (err) {
     showFailure(err);
   }
@@ -447,10 +454,13 @@ el('import').addEventListener('change', async (e) => {
   e.target.value = '';
 });
 
-el('retry').addEventListener('click', () => {
+el('pool-retry').addEventListener('click', () => {
   render();
 });
 
+// 切到御膳房之前：库被改过就先重画，画好再开始切换动画（ui-tabs.js 等这个 Promise）。
+document.addEventListener('viewwillshow', (e) => {
+  if (e.detail.view === 'pool' && writeCount() !== seenWrites) e.detail.waitUntil(render());
+});
+
 await render();
-// 店铺列表画好了，从翻牌子切过来的那段过渡可以开始淡入（src/page-transition.js）。
-window.markPageReady?.();
