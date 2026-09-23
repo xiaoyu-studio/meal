@@ -15,77 +15,16 @@
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="stylesheet" href="css/style.css">
 <script>
-// iOS 主屏 App 在状态栏透明时（这一页为了让饭点颜色铺到状态栏后面开着它）
-// 报给页面的可用高度会少一截状态栏的高度，底部那条页面够不着 —— TabBar
-// 和补问面板都会被抬高。量出「屏幕高度 − 可用高度」写进 --vp-gap，
-// style.css 里 html.app-today 那段把整页补下去。
-//
-// **只量一次，量完锁死。** 补偿本身会改变被量的那个值：页面补高之后 iOS
-// 报的可用高度跟着变，再量就得出另一个差值，补了又变 —— 来回摆，
-// 表现就是 TabBar 一直跳、卡片长度一直变。所以必须在「还没补偿」的
-// 干净状态下量，量到就定死，转屏时才先清零、等一下再重新量。
-//
-// 量的时机是排版之后的下一帧：<head> 里页面还没排版，iOS 那会儿报的
-// 是屏幕整高，差值会算成 0（等于没补）。这期间内容是藏着的
-// （style.css 的 html.app-today body），所以这一下调整看不见。
-//
-// 这里不碰任何可调常数，所以不违反「常数只放 config.js」。
-// 只有这一页量：候选池没开透明状态栏，它的可用高度本来就从状态栏下面算起，
-// 补了反而会把 TabBar 推到屏幕外面。Safari 浏览器里也不补 —— 那里矮的是地址栏。
-(function () {
-  var locked = false;
-
-  function readGap() {
-    if (navigator.standalone !== true) return 0;
-    var portrait = window.innerHeight >= window.innerWidth;
-    // iOS 的 screen.width/height 不随横竖屏交换，按当前朝向取对应那条边。
-    var full = portrait
-      ? Math.max(screen.width, screen.height)
-      : Math.min(screen.width, screen.height);
-    var diff = full - window.innerHeight;
-    // 上限 80px 是保险：状态栏最高 59，量出更大的值说明假设不成立，宁可不补。
-    return diff > 0 && diff <= 80 ? diff : 0;
-  }
-
-  function settle() {
-    if (locked) return;
-    locked = true;
-    document.documentElement.style.setProperty('--vp-gap', readGap() + 'px');
-    // 高度定了才把内容放出来，补偿那一下挪动就不会被看见。
-    document.documentElement.classList.add('vp-ready');
-  }
-
-  function scheduleSettle() {
-    // 排版之后的下一帧再量。
-    requestAnimationFrame(settle);
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', scheduleSettle);
-  } else {
-    scheduleSettle();
-  }
-  // 兜底：万一上面那条没走到，也不能一直藏着内容。
-  setTimeout(settle, 700);
-
-  // 转屏：先把补偿清零，等版面按新朝向排好，再在干净状态下重新量一次。
-  window.addEventListener('orientationchange', function () {
-    document.documentElement.style.setProperty('--vp-gap', '0px');
-    locked = false;
-    setTimeout(settle, 300);
-  });
-
-  // 页面切换的淡入淡出被打断时（比如还没播完又点了另一个标签），浏览器那条
-  // Promise 没人接，控制台会报一条 AbortError。接住它，不然真机上排查别的
-  // 问题时满屏都是这条。被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
-  function hushTransition(e) {
-    if (!e.viewTransition) return;
-    e.viewTransition.ready.catch(function () {});
-    e.viewTransition.finished.catch(function () {});
-  }
-  window.addEventListener('pagereveal', hushTransition);
-  window.addEventListener('pageswap', hushTransition);
-})();
+// 页面切换的淡入淡出被打断时（比如还没播完又点了另一个标签），浏览器那条
+// Promise 没人接，控制台会报一条 AbortError。接住它，不然真机上排查别的
+// 问题时满屏都是这条。被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
+function hushTransition(e) {
+  if (!e.viewTransition) return;
+  e.viewTransition.ready.catch(function () {});
+  e.viewTransition.finished.catch(function () {});
+}
+window.addEventListener('pagereveal', hushTransition);
+window.addEventListener('pageswap', hushTransition);
 </script>
 </head>
 <body>
