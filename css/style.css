@@ -382,6 +382,14 @@ html.app-today body {
 }
 html.app-today .tabbar,
 html.app-today .overlay { position: absolute; }
+
+/* 高度补偿定下来之前先不显示内容：那一下挪动（整页往下补一截）就不会被看见。
+   底色在 <html> 上，所以这期间屏幕已经是饭点颜色，不是白屏。
+   index.html 里的行内脚本量稳了就加 .vp-ready。
+   用 visibility 不用 opacity 过渡：过渡在页面不可见时是冻结的，万一卡在
+   「全透明」那一帧，整页就白等了 —— 这地方不值得为一点淡入效果冒险。 */
+html.app-today body { visibility: hidden; }
+html.app-today.vp-ready body { visibility: visible; }
 /* 卡片拖出屏幕、翻页时飞出去，会把页面撑宽。横向裁掉，用 clip 不用 hidden：
    clip 不会变成滚动容器。拍立得和贴纸伸出纸边的距离在内边距里，裁不到。
    底部内边距给固定在下面的 TabBar 让位。 */

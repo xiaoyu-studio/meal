@@ -27,43 +27,60 @@
 // 只有这一页量：候选池没开透明状态栏，它的可用高度本来就从状态栏下面算起，
 // 补了反而会把 TabBar 推到屏幕外面。Safari 浏览器里也不补 —— 那里矮的是地址栏。
 (function () {
-  function fitViewport() {
-    var gap = 0;
-    if (navigator.standalone === true) {
-      var portrait = window.innerHeight >= window.innerWidth;
-      // iOS 的 screen.width/height 不随横竖屏交换，按当前朝向取对应那条边。
-      var full = portrait
-        ? Math.max(screen.width, screen.height)
-        : Math.min(screen.width, screen.height);
-      var diff = full - window.innerHeight;
-      // 上限 80px 是保险：状态栏最高 59，量出更大的值说明假设不成立，宁可不补。
-      if (diff > 0 && diff <= 80) gap = diff;
-    }
-    document.documentElement.style.setProperty('--vp-gap', gap + 'px');
+  var applied = null;     // 已经写进去的差值
+  var revealed = false;   // 内容是不是已经放出来了
+
+  function measure() {
+    if (navigator.standalone !== true) return 0;
+    var portrait = window.innerHeight >= window.innerWidth;
+    // iOS 的 screen.width/height 不随横竖屏交换，按当前朝向取对应那条边。
+    var full = portrait
+      ? Math.max(screen.width, screen.height)
+      : Math.min(screen.width, screen.height);
+    var diff = full - window.innerHeight;
+    // 上限 80px 是保险：状态栏最高 59，量出更大的值说明假设不成立，宁可不补。
+    return diff > 0 && diff <= 80 ? diff : 0;
   }
-  // 量很多次，不是量一次。<head> 里这一次赶在首屏之前，但那会儿页面还没排版，
-  // iOS 报的高度可能还是屏幕整高（差值 0，等于没补，TabBar 又偏高）——
-  // 所以排版完、加载完、从后台回来、转屏时都要再量一遍，数变了就跟着改。
-  // 值没变时 setProperty 写同样的值，不会触发重排。
-  fitViewport();
-  document.addEventListener('DOMContentLoaded', fitViewport);
+
+  // force 为真（转屏）时无条件采纳；平时只认「跟当前值差 8px 以上」的变化 ——
+  // 量到的数在加载过程中会小幅抖动，每抖一下就挪一次整页，看起来就是闪。
+  function apply(force) {
+    var gap = measure();
+    if (applied === null || force || Math.abs(gap - applied) >= 8) {
+      if (gap !== applied) {
+        applied = gap;
+        document.documentElement.style.setProperty('--vp-gap', gap + 'px');
+      }
+    }
+  }
+
+  // 放出内容。挪动都发生在这之前，用户看到的只有一屏饭点颜色，然后内容淡入。
+  function reveal() {
+    if (revealed) return;
+    revealed = true;
+    document.documentElement.classList.add('vp-ready');
+  }
+
+  apply();   // 首屏之前先按当前能拿到的值排一版
+  document.addEventListener('DOMContentLoaded', function () { apply(); });
   window.addEventListener('load', function () {
-    fitViewport();
-    // 加载完那一帧高度有时还在收敛，下一帧再确认一次。
-    requestAnimationFrame(fitViewport);
+    apply();
+    // 加载完那一帧高度有时还在收敛，下一帧再确认一次，然后才放内容出来。
+    requestAnimationFrame(function () { apply(); reveal(); });
   });
-  window.addEventListener('pageshow', fitViewport);
-  window.addEventListener('orientationchange', fitViewport);
-  window.addEventListener('resize', fitViewport);
+  // 兜底：load 迟迟不来也不能一直黑着。
+  setTimeout(reveal, 700);
+  window.addEventListener('pageshow', function () { apply(); reveal(); });
+  window.addEventListener('orientationchange', function () { apply(true); });
+  window.addEventListener('resize', function () { apply(); });
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', fitViewport);
+    window.visualViewport.addEventListener('resize', function () { apply(); });
   }
 
   // 页面切换的淡入淡出被打断时（比如还没播完又点了另一个标签），浏览器那条
   // Promise 没人接，控制台会报一条 AbortError。接住它，不然真机上排查别的
-  // 问题时满屏都是这条。
+  // 问题时满屏都是这条。被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
   function hushTransition(e) {
-    // 被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
     if (!e.viewTransition) return;
     e.viewTransition.ready.catch(function () {});
     e.viewTransition.finished.catch(function () {});
