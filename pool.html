@@ -10,6 +10,19 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="stylesheet" href="css/style.css">
+<script>
+// 同 index.html 末尾那两行：页面切换的淡入淡出被打断时接住那条 Promise，
+// 否则控制台会多一条 AbortError。这一页不量可用高度 —— 它没开透明状态栏，
+// 高度本来就是对的，补了反而会把 TabBar 推到屏幕外面。
+function hushTransition(e) {
+  // 被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
+  if (!e.viewTransition) return;
+  e.viewTransition.ready.catch(function () {});
+  e.viewTransition.finished.catch(function () {});
+}
+window.addEventListener('pagereveal', hushTransition);
+window.addEventListener('pageswap', hushTransition);
+</script>
 </head>
 <body>
 <main class="wrap has-tabbar">

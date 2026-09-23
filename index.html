@@ -41,8 +41,35 @@
     }
     document.documentElement.style.setProperty('--vp-gap', gap + 'px');
   }
+  // 量很多次，不是量一次。<head> 里这一次赶在首屏之前，但那会儿页面还没排版，
+  // iOS 报的高度可能还是屏幕整高（差值 0，等于没补，TabBar 又偏高）——
+  // 所以排版完、加载完、从后台回来、转屏时都要再量一遍，数变了就跟着改。
+  // 值没变时 setProperty 写同样的值，不会触发重排。
   fitViewport();
+  document.addEventListener('DOMContentLoaded', fitViewport);
+  window.addEventListener('load', function () {
+    fitViewport();
+    // 加载完那一帧高度有时还在收敛，下一帧再确认一次。
+    requestAnimationFrame(fitViewport);
+  });
+  window.addEventListener('pageshow', fitViewport);
+  window.addEventListener('orientationchange', fitViewport);
   window.addEventListener('resize', fitViewport);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitViewport);
+  }
+
+  // 页面切换的淡入淡出被打断时（比如还没播完又点了另一个标签），浏览器那条
+  // Promise 没人接，控制台会报一条 AbortError。接住它，不然真机上排查别的
+  // 问题时满屏都是这条。
+  function hushTransition(e) {
+    // 被跳过时拒绝的是 ready，不是 finished —— 两条都要接。
+    if (!e.viewTransition) return;
+    e.viewTransition.ready.catch(function () {});
+    e.viewTransition.finished.catch(function () {});
+  }
+  window.addEventListener('pagereveal', hushTransition);
+  window.addEventListener('pageswap', hushTransition);
 })();
 </script>
 </head>
