@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<!-- app-today：这一页的整页布局（锁一屏、TabBar 贴底、高度补偿）挂在这个 class 上，
+     不挂 data-slot —— 后者要等脚本算出饭点才写得上，在那之前 TabBar 会先落在
+     错的位置再跳一下。data-slot 只管配色。 -->
+<html lang="zh-CN" class="app-today">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -11,6 +14,37 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="stylesheet" href="css/style.css">
+<script>
+// 首屏之前就要量：iOS 主屏 App 在状态栏透明时（这一页为了让饭点颜色铺到状态栏
+// 后面开着它）报给页面的可用高度会少一截状态栏的高度，底部那条页面够不着 ——
+// TabBar 和补问面板都会被抬高。量出「屏幕高度 − 可用高度」写进 --vp-gap，
+// style.css 里 html.app-today 那段把整页补下去。
+//
+// 写成 <head> 里的行内脚本而不是放进 ui-today.js：模块要等下载和解析，
+// 那之前可能已经画了一帧，TabBar 会在错的位置闪一下。
+// 这里不碰任何可调常数，所以不违反「常数只放 config.js」。
+//
+// 只有这一页量：候选池没开透明状态栏，它的可用高度本来就从状态栏下面算起，
+// 补了反而会把 TabBar 推到屏幕外面。Safari 浏览器里也不补 —— 那里矮的是地址栏。
+(function () {
+  function fitViewport() {
+    var gap = 0;
+    if (navigator.standalone === true) {
+      var portrait = window.innerHeight >= window.innerWidth;
+      // iOS 的 screen.width/height 不随横竖屏交换，按当前朝向取对应那条边。
+      var full = portrait
+        ? Math.max(screen.width, screen.height)
+        : Math.min(screen.width, screen.height);
+      var diff = full - window.innerHeight;
+      // 上限 80px 是保险：状态栏最高 59，量出更大的值说明假设不成立，宁可不补。
+      if (diff > 0 && diff <= 80) gap = diff;
+    }
+    document.documentElement.style.setProperty('--vp-gap', gap + 'px');
+  }
+  fitViewport();
+  window.addEventListener('resize', fitViewport);
+})();
+</script>
 </head>
 <body>
 <main class="wrap">

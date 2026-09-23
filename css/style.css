@@ -352,7 +352,9 @@ body {
    页面锁死在一屏高、不许上下滚 —— 以前能滚，渐变按文档高度铺，
    回弹拉出来的那一截是另一个颜色，中间有一道分界线。
    touch-action: none 把所有手势交给 JS：纵向没东西可滚，横向是翻牌子。
-   只在首页生效（data-slot 只有 ui-today.js 会写），候选池照常滚。
+   挂在 html.app-today 上（index.html 写死的 class），不挂 data-slot ——
+   后者要等脚本算出饭点才写得上，那之前 TabBar 会先落在错的位置再跳一下。
+   data-slot 只管配色。候选池没有这个 class，照常滚。
 
    --vp-gap：iOS 主屏 App 在「内容延伸到状态栏底下」（black-translucent）时，
    系统报给页面的可用高度会少掉一截状态栏高度，底部那一条页面够不着，
@@ -363,13 +365,13 @@ body {
    把底下那条裁掉。不滚动靠 touch-action: none —— 浏览器根本不接纵向手势。
    TabBar 和补问浮层在这一页也改成相对 body 的 absolute（见下面），跟着 body
    一起铺到屏幕真正的底部；页面不滚动，absolute 与 fixed 看起来一样。 */
-html[data-slot] {
+html.app-today {
   height: calc(100% + var(--vp-gap, 0px));
   overscroll-behavior: none;
   background: linear-gradient(160deg, var(--board-a), var(--board-b));
   background-color: var(--board-b);
 }
-html[data-slot] body {
+html.app-today body {
   position: relative;
   height: 100%;
   overscroll-behavior: none;
@@ -378,12 +380,12 @@ html[data-slot] body {
   display: flex;
   flex-direction: column;
 }
-html[data-slot] .tabbar,
-html[data-slot] .overlay { position: absolute; }
+html.app-today .tabbar,
+html.app-today .overlay { position: absolute; }
 /* 卡片拖出屏幕、翻页时飞出去，会把页面撑宽。横向裁掉，用 clip 不用 hidden：
    clip 不会变成滚动容器。拍立得和贴纸伸出纸边的距离在内边距里，裁不到。
    底部内边距给固定在下面的 TabBar 让位。 */
-html[data-slot] .wrap {
+html.app-today .wrap {
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -680,7 +682,13 @@ html[data-slot] .wrap {
   box-shadow: 0 10px 26px rgb(20 10 30 / 0.3);
   transform: rotate(-0.8deg);
   touch-action: manipulation;
+  /* 切换页面时把它从整页快照里摘出来单独处理：两页的 TabBar 同名，
+     浏览器认定是同一个东西，位置又一样，于是切换过程中它稳稳不动，
+     只有内容在交叉淡入 —— 这是原生标签栏的感觉。 */
+  view-transition-name: tabbar;
 }
+/* 当前这一页的标签点了也不跳：原生标签栏点当前页不会整页重载。 */
+.tab.on { pointer-events: none; }
 .tabbar::before {
   content: "";
   position: absolute;
@@ -720,3 +728,21 @@ html[data-slot] .wrap {
 /* 候选池那页照常滚动，底部留出 TabBar 的位置，最后一家店不被挡住。 */
 .has-tabbar { padding-bottom: calc(var(--tabbar-h) + 2.5rem + env(safe-area-inset-bottom)); }
 .page-sub { font-size: 0.8rem; font-weight: 400; color: var(--muted); margin-left: 0.3rem; }
+
+/* ============================================================
+   两个标签之间的切换
+   浏览器自己在新旧两页之间做交叉淡入（跨文档视图过渡），不用改成单页应用。
+   TabBar 已经用 view-transition-name 摘出来单独处理，切换时不动。
+   Safari 18.2 起支持；不支持的版本忽略这段，还是原来的整页跳转。
+   ============================================================ */
+@view-transition { navigation: auto; }
+
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 0.22s; }
+::view-transition-group(tabbar) { animation-duration: 0.22s; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
