@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- app-today：这一页的整页布局（锁一屏、TabBar 贴底、高度补偿）挂在这个 class 上，
+<!-- app-today：这一页的整页布局（锁一屏、TabBar 贴底）挂在这个 class 上，
      不挂 data-slot —— 后者要等脚本算出饭点才写得上，在那之前 TabBar 会先落在
      错的位置再跳一下。data-slot 只管配色。 -->
 <html lang="zh-CN" class="app-today">
@@ -7,7 +7,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- 不要加 apple-mobile-web-app-status-bar-style=black-translucent：主屏 App 开了透明
+     状态栏，页面顶边会延伸到状态栏后面，底边却不跟着往下，固定在底部的 TabBar
+     被整体抬高约一个状态栏（2026-09-23 真机录屏实测约 50pt，和候选池页对不齐）。
+     状态栏用普通样式，颜色由下面的 theme-color 给，ui-today.js 按饭点和深浅色改写。 -->
+<meta name="theme-color" content="#3b2a52">
 <title>今天这顿</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">

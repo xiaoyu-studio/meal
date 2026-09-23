@@ -8,10 +8,22 @@ import { dishEmoji } from './emoji.js';
 
 const el = (id) => document.getElementById(id);
 
+/** 整页底色跟着饭点走（css/style.css 的 html[data-slot]），写在 <html> 上：它的背景
+    就是整张画布。状态栏那一条由 iOS 涂色，同时写 theme-color 告诉它用渐变顶端那个颜色 ——
+    这一页用的是普通状态栏（透明状态栏会把页面底边抬高一截，见 index.html）。 */
+function paintSlot(slot) {
+  const root = document.documentElement;
+  root.dataset.slot = slot;
+  const top = getComputedStyle(root).getPropertyValue('--board-a').trim();
+  if (top) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', top);
+}
+
 /** 配色尽早定下来：这一步不读库，只看时钟，所以能在第一帧之前写上。
-    render() 之后还会再写一次（跨饭点重画时要更新）。
-    页面高度的补偿在 index.html 的行内脚本里 —— 那个要赶在首屏之前。 */
-document.documentElement.dataset.slot = resolveSlot(Date.now());
+    render() 之后还会再写一次（跨饭点重画时要更新）。 */
+paintSlot(resolveSlot(Date.now()));
+// 系统深浅色切换时 --board-a 会变，theme-color 跟着重写。
+window.matchMedia?.('(prefers-color-scheme: dark)')
+  .addEventListener?.('change', () => paintSlot(document.documentElement.dataset.slot));
 
 /** slot 优先取 URL 参数（快捷指令会带上），缺失或非法时按当前时间推断。 */
 function resolveSlot(now) {
@@ -328,10 +340,9 @@ function animateStep(delta) {
 async function render(now = Date.now(), data = null) {
   try {
     const slot = resolveSlot(now);
-    // 整页底色跟着饭点走（css/style.css 的 html[data-slot]），写在 <html> 上：
-    // 它的背景就是整张画布。在这里写而不在 showAt 里写：「没菜可推」那张卡片
-    // 也铺在同一个颜色上。从后台切回来跨了饭点时 refreshIfStale 会重画，属性跟着更新。
-    document.documentElement.dataset.slot = slot;
+    // 在这里写而不在 showAt 里写：「没菜可推」那张卡片也铺在同一个颜色上。
+    // 从后台切回来跨了饭点时 refreshIfStale 会重画，配色跟着更新。
+    paintSlot(slot);
     const { shops, dishes, events } = data ?? await loadAll();
     const nowKey = localDateKey(now);
 

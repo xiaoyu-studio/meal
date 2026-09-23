@@ -356,20 +356,18 @@ body {
    后者要等脚本算出饭点才写得上，那之前 TabBar 会先落在错的位置再跳一下。
    data-slot 只管配色。候选池没有这个 class，照常滚。
 
-   **文档要比屏幕高 1 像素**：iOS 主屏 App 在状态栏透明时，页面**不能滚**的话
-   报给页面的可用高度会少一截状态栏，底部固定的东西（TabBar、补问面板）被抬高
-   一截；页面一旦能滚，报的就是对的。所以这一页虽然不让滚，也要让文档多出 1px，
-   让 iOS 始终按「能滚」来算。候选池页同理（数据没加载出来、内容很短时会中招），
-   见文件末尾那条 min-height。
+   **文档要比屏幕高 1 像素**：iOS 主屏 App 在页面**不能滚**时，报给页面的可用高度
+   有时会少一截；页面一旦能滚，报的就是对的。所以这一页虽然不让滚，也要让文档
+   多出 1px。候选池页同理，见文件末尾那条 min-height。
    真正不让滚靠的是 touch-action: none —— 浏览器根本不接纵向手势。
    TabBar 和补问浮层两页都是 position: fixed —— 相对屏幕定死，不跟页面走。
-   曾经在这一页改成相对 body 的 absolute（为了跟着高度补偿一起下移），
-   补偿删掉后那句也一并去掉了：absolute 跟的是页面底边，页面高度一变它就跟着变。 */
+   这一页**不开透明状态栏**（理由见 index.html 那行注释），状态栏那一条由 iOS
+   按 theme-color / 页面底色涂，所以底色取渐变**顶端**的 --board-a，跟状态栏接得上。 */
 html.app-today {
   height: calc(100% + 1px);
   overscroll-behavior: none;
   background: linear-gradient(160deg, var(--board-a), var(--board-b));
-  background-color: var(--board-b);
+  background-color: var(--board-a);
 }
 html.app-today body {
   position: relative;
