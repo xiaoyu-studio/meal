@@ -362,8 +362,9 @@ body {
    让 iOS 始终按「能滚」来算。候选池页同理（数据没加载出来、内容很短时会中招），
    见文件末尾那条 min-height。
    真正不让滚靠的是 touch-action: none —— 浏览器根本不接纵向手势。
-   TabBar 和补问浮层在这一页是相对 body 的 absolute（见下面），跟着 body 一起
-   铺到屏幕真正的底部；页面不滚动，absolute 与 fixed 看起来一样。 */
+   TabBar 和补问浮层两页都是 position: fixed —— 相对屏幕定死，不跟页面走。
+   曾经在这一页改成相对 body 的 absolute（为了跟着高度补偿一起下移），
+   补偿删掉后那句也一并去掉了：absolute 跟的是页面底边，页面高度一变它就跟着变。 */
 html.app-today {
   height: calc(100% + 1px);
   overscroll-behavior: none;
@@ -379,8 +380,6 @@ html.app-today body {
   display: flex;
   flex-direction: column;
 }
-html.app-today .tabbar,
-html.app-today .overlay { position: absolute; }
 
 /* 卡片拖出屏幕、翻页时飞出去，会把页面撑宽。横向裁掉，用 clip 不用 hidden：
    clip 不会变成滚动容器。拍立得和贴纸伸出纸边的距离在内边距里，裁不到。
