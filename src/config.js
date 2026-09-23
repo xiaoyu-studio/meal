@@ -17,6 +17,8 @@ export const CONFIG = {
   LONG_TIME_FDISH: 0.85,
   JITTER_MIN: 0.85,
   JITTER_MAX: 1.15,
+  // 御膳房里好吃度画成几颗心：好吃度（0–1）× 这个数，四舍五入。
+  TASTE_HEARTS: 5,
 };
 
 export const SLOTS = ['breakfast', 'lunch', 'dinner'];

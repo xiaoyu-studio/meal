@@ -170,32 +170,6 @@ html.switching #feedback { display: none; }
   cursor: pointer;
 }
 
-.page-title { font-size: 1.5rem; margin: 1rem 0 1.25rem; }
-.form-title { font-size: 1rem; margin: 0 0 0.75rem; color: var(--muted); }
-
-.form {
-  display: grid;
-  gap: 0.75rem;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  padding: 1.25rem;
-  margin-bottom: 1.5rem;
-}
-/* display: grid 是作者级声明，会盖掉浏览器默认的 [hidden] { display: none }。
-   不补这条，JS 里设 .hidden = true 对表单毫无作用。同 .overlay / .fb-price-box。 */
-.form[hidden] { display: none; }
-
-.form input,
-.form select {
-  padding: 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  background: var(--bg);
-  color: var(--fg);
-  font-size: 1rem;
-}
-
 /* 操作成功的即时反馈。#io-msg 那行小灰字在页面顶部，用户在下面删店时
    根本看不见 —— 这个固定在屏幕底部，无论滚到哪儿都会跳出来。 */
 .toast {
@@ -228,7 +202,6 @@ html.switching #feedback { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .toast { transition: none; }
-  .shop-block { transition: none; }
   /* 首页便签卡片与 TabBar：装饰性动画全停。跟手拖动不在此列 —— 关掉手势
      等于关掉一个功能，那不是「减少动效」的意思。按钮按下的位移是操作反馈，
      也留着。!important 是因为动画声明在文件后面，按源码顺序会盖过这里。 */
@@ -239,72 +212,6 @@ html.switching #feedback { display: none; }
   .under.moving, .under.moving .tape, .under.moving .polaroid, .under.moving .stickers {
     transition: none;
   }
-}
-
-.io-row { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; }
-.io-row[hidden] { display: none; }  /* 同上：display: flex 会盖掉 [hidden] */
-.io-row > * { flex: 1; margin-top: 0; }
-.import-label { text-align: center; }
-.io-msg { min-height: 1.5rem; color: var(--muted); font-size: 0.85rem; margin: 0 0 1rem; }
-
-.shop-block {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 1rem;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-
-/* 删店时先淡出再重渲染，否则卡片「啪」一下就没了，看不出删的是哪一张。 */
-.shop-removing {
-  opacity: 0;
-  transform: scale(0.97);
-}
-
-.shop-head { display: flex; justify-content: space-between; align-items: baseline; }
-.shop-title { font-size: 1.1rem; font-weight: 600; margin: 0; }
-.shop-meta { color: var(--muted); font-size: 0.8rem; }
-.shop-blocked { color: var(--accent); }
-
-/* 「吃坏了」的回头路：误触拉黑之后要能在候选池里改回来。 */
-.hygiene-row { margin: 0.5rem 0 0; }
-.hygiene-select {
-  margin-left: 0.5rem;
-  padding: 0.4rem 0.5rem;
-  border: 1px solid var(--line);
-  border-radius: 0.5rem;
-  background: var(--bg);
-  color: var(--fg);
-  font-size: 0.9rem;
-}
-
-.dish-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.75rem;
-  padding: 0.6rem 0;
-  border-top: 1px solid var(--line);
-}
-
-.dish-stat { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
-
-/* 被「别再推这个」按过的菜。用强调色而不是灰色 —— 这是个用户主动做过的
-   决定，不是背景信息，得能一眼扫到。
-   独占一行是量出来的结果不是偏好：375px 下左栏只剩 126px，接在
-   「¥31・午/晚」后面必然换行，与其让它半吊着不如写死。 */
-.dish-muted {
-  display: block;
-  margin-top: 0.15rem;
-  color: var(--accent);
-  font-size: 0.78rem;
-}
-
-/* 「已静音 · MM-DD」后面的「取消」。.link 默认 0.85rem，比这一行大一号会显得突兀。 */
-.dish-muted .link {
-  font-size: inherit;
-  padding: 0 0 0 0.4rem;
 }
 
 /* ============================================================
@@ -407,9 +314,13 @@ html.switching .view { visibility: visible; }
 }
 
 /* 御膳房：普通的上下滚动页面，自己就是滚动容器。contain 让滚到头的回弹
-   只发生在这一层，不带着整个文档（和 TabBar）一起晃。 */
+   只发生在这一层，不带着整个文档（和 TabBar）一起晃。
+   顶部不留安全区：饭点色的封面自己铺到状态栏后面（.cover 的上内边距里含安全区）。
+   横向裁掉：歪着放的纸页角会探出去一两像素，不裁就能左右滑。 */
 .view-pool {
+  padding-top: 0;
   background: var(--bg);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -772,7 +683,367 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
 
 /* 御膳房底部留出 TabBar 的位置，最后一家店不被挡住。 */
 .has-tabbar { padding-bottom: calc(var(--tabbar-h) + 2.5rem + env(safe-area-inset-bottom)); }
-.page-sub { font-size: 0.8rem; font-weight: 400; color: var(--muted); margin-left: 0.3rem; }
+
+/* ============================================================
+   御膳房：御用手账本
+   顶上是饭点色的封面（线装针脚、书名签、朱红「御」字印），跟翻牌子同一套
+   饭点色；每家店是一页格子纸，左边一道装订边，顶上垂一条明黄丝带；
+   卫生标记是店名旁的一枚印章。加店、加菜的表单收在 <details> 里。
+   纸、格子、胶囊用便签那套变量，深色模式跟着走；下面几个是这一页自己的。
+   ============================================================ */
+:root {
+  --seal: #c8322b;          /* 朱砂印泥 */
+  --seal-cold: #5b5550;     /* 「冷宫」章：没了颜色 */
+  --gold: #e9b949;          /* 明黄丝带 */
+  --binding: #d9c7a3;       /* 纸页左边的装订边 */
+  --slip-rule: #b89a6a;     /* 书名签的双线框 */
+  --chip-plain: #f1ebe0;    /* 平台、「去店里」这类不带饭点色的小标签 */
+  --emo-bg: linear-gradient(150deg, #ffe0b8, #ffc9d4);   /* 同拍立得的相片底 */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --seal: #b8433a;
+    --seal-cold: #4a4541;
+    --gold: #b8913c;
+    --binding: #5a4a36;
+    --slip-rule: #7d6a4c;
+    --chip-plain: #332b24;
+    --emo-bg: linear-gradient(150deg, #e3c4a2, #ddadb8);
+  }
+}
+
+.view-pool > .wrap { padding-top: 0; padding-inline: 0; }
+.view-pool .card { margin: 1.5rem 1rem; }   /* 读取失败的那张卡片 */
+
+/* ---- 封面 ---- */
+.cover {
+  position: relative;
+  padding: calc(env(safe-area-inset-top) + 1.6rem) 6.5rem 2.6rem 2.4rem;
+  border-radius: 0 0 1.8rem 1.8rem;
+  background: linear-gradient(160deg, var(--board-a), var(--board-b));
+  color: #fff;
+}
+/* 往上再铺一屏同色：滚到顶再往下拽，回弹露出来的是封面色，不是一截页面底色。 */
+.cover::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 100%;
+  height: 100vh;
+  background: var(--board-a);
+}
+/* 线装书的装订线：一道虚线穿过一排针眼。 */
+.stitch {
+  position: absolute;
+  left: 1rem;
+  top: calc(env(safe-area-inset-top) + 0.8rem);
+  bottom: 1.6rem;
+  width: 8px;
+  background:
+    linear-gradient(rgb(255 255 255 / 0.35), rgb(255 255 255 / 0.35)) 3px 0 / 2px 100% no-repeat,
+    radial-gradient(circle, rgb(255 255 255 / 0.55) 2.5px, transparent 3px) 0 0 / 8px 22px repeat-y;
+}
+/* 书名签：贴在封面上的一张小纸条，双线框，歪一点。 */
+.slip {
+  position: relative;
+  display: inline-block;
+  padding: 0.45rem 1.1rem 0.5rem;
+  border: 3px double var(--slip-rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 6px 14px rgb(0 0 0 / 0.25);
+  transform: rotate(-1.5deg);
+}
+.slip small { display: block; font-size: 0.7rem; color: var(--ink-faint); letter-spacing: 0.3em; }
+.slip-title {
+  margin: 0;
+  font: 700 1.9rem/1.2 "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  letter-spacing: 0.12em;
+}
+.seal-big {
+  position: absolute;
+  right: -1.3rem; bottom: -1rem;
+  width: 2.5rem; height: 2.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--seal);
+  color: #fff;
+  font: 700 1.3rem "Yuanti SC", "PingFang SC", sans-serif;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.5);
+  transform: rotate(10deg);
+}
+.cover-sub { margin: 1rem 0 0; font-size: 0.85rem; opacity: 0.8; }
+/* 导出、导入的结果（「已生成 xxx.json」「导入失败」）写在封面上，白字。 */
+.cover .io-msg { margin: 0.3rem 0 0; color: #fff; font-size: 0.8rem; opacity: 0.9; }
+.cover .io-msg:empty { display: none; }
+.io-row {
+  position: absolute;
+  right: 1rem;
+  top: calc(env(safe-area-inset-top) + 1.6rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+/* display: flex 会盖掉 [hidden]，失败态收不起来。同 .overlay / .toast。 */
+.io-row[hidden] { display: none; }
+.io-chip {
+  padding: 0.3rem 0.7rem;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+/* ---- 表单（加店、加菜共用） ---- */
+.io-msg { color: var(--ink-faint); font-size: 0.8rem; margin: 0; }
+.form .io-msg:empty { display: none; }
+.form { display: grid; gap: 0.6rem; margin-top: 0.8rem; }
+.form-two { display: flex; gap: 0.5rem; }
+.form-two > * { flex: 1; min-width: 0; }
+.form input,
+.form select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border: 2px solid var(--paper-line);
+  border-radius: 0.8rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 1rem;   /* 小于 16px 时 iOS 聚焦会自动放大页面 */
+}
+.form input[name="refPrice"] { flex: 0 1 7rem; }
+.form .go {
+  padding: 0.8rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(100deg, #ff8a3d, #ff5f9e);
+  box-shadow: 0 5px 0 #c23f78;
+  color: #fff;
+  font: 700 1rem "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.form .go:active { transform: translateY(4px); box-shadow: 0 1px 0 #c23f78; }
+.form .later {
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+/* <details> 的小三角不要：展开入口自己画。 */
+.add-shop > summary, .add-dish > summary { list-style: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.add-shop > summary::-webkit-details-marker, .add-dish > summary::-webkit-details-marker { display: none; }
+
+/* ---- 招一家新店进宫：压在封面下沿的一张饭点色贴纸 ---- */
+.add-shop {
+  position: relative;
+  margin: -1.1rem 1.25rem 1.5rem;
+  padding: 0.8rem 1rem;
+  border-radius: 1rem;
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  box-shadow: 0 4px 0 rgb(20 10 30 / 0.15);
+  transform: rotate(-1deg);
+}
+.add-shop[open] { transform: rotate(-0.4deg); }
+.add-shop[hidden] { display: none; }
+.add-shop > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font: 700 1rem "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+}
+.add-shop > summary b {
+  width: 1.8rem; height: 1.8rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--chip-fg);
+  color: var(--chip-bg);
+}
+.add-shop .form input,
+.add-shop .form select { border-color: transparent; }
+.add-shop .io-msg { color: var(--chip-fg); }
+
+/* ---- 每家店一页手账纸 ---- */
+.shop-block {
+  position: relative;
+  margin: 0 1rem 1.5rem;
+  padding: 1.2rem 1.1rem 0.8rem;
+  border-radius: 0.4rem 1rem 1rem 0.4rem;
+  background: var(--paper);
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 22px);
+  color: var(--ink);
+  box-shadow: -4px 0 0 var(--binding), 0 6px 18px rgb(20 10 30 / 0.12);
+  transform: rotate(0.4deg);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.shop-block:nth-child(even) { transform: rotate(-0.5deg); }
+/* 删店时先淡出再重渲染，否则卡片「啪」一下就没了，看不出删的是哪一张。 */
+.shop-block.shop-removing { opacity: 0; transform: scale(0.97); }
+/* 拉黑（冷宫）的店：整页褪色。它不会再被推荐，留在这里只为了能改回来。 */
+.shop-cold { filter: grayscale(0.7); opacity: 0.75; }
+.shop-cold .ribbon { display: none; }
+
+/* 大半截露在纸页上沿外面，只垂进来一点：垂得深了会压住长店名的第一行。 */
+.ribbon {
+  position: absolute;
+  top: -14px; right: 4.6rem;
+  width: 16px; height: 30px;
+  background: var(--gold);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+}
+.shop-block:nth-child(even) .ribbon { right: 6rem; }
+
+.shop-head { display: flex; align-items: flex-start; gap: 0.6rem; }
+.shop-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 700 1.2rem/1.3 "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+/* 卫生印章。透明的 <select> 铺满整枚印章，点印章就弹系统选择框。 */
+.seal {
+  position: relative;
+  flex: none;
+  width: 2.4rem; height: 2.4rem;
+  display: grid;
+  place-items: center;
+  padding: 0 0.45rem;
+  border-radius: 4px;
+  font: 700 0.72rem/1.05 "Yuanti SC", "PingFang SC", sans-serif;
+  text-align: center;
+  transform: rotate(-8deg);
+}
+.seal > span { width: 1em; }   /* 一行一个字，像印章那样竖着排 */
+.seal-trusted { background: var(--seal); color: #fff; box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.45); }
+.seal-unknown { border: 2px dashed var(--ink-faint); color: var(--ink-faint); }
+.seal-blocked { background: var(--seal-cold); color: #eee; box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.3); }
+.hygiene-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  font-size: 1rem;   /* 同上：防 iOS 聚焦放大 */
+  cursor: pointer;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.3rem 0 0.4rem; }
+.chip {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--chip-plain);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+.chip-bad { color: var(--accent); }
+
+/* ---- 一道菜一行：emoji ｜ 菜名、价钱饭点 ｜ 红心、吃过几次 ｜ ✕ ---- */
+.dish-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0;
+  border-top: 1.5px dashed var(--paper-line);
+}
+.dish-emo {
+  flex: none;
+  width: 2.4rem; height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: var(--emo-bg);
+  font-size: 1.35rem;
+  transform: rotate(-4deg);
+}
+.dish-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dish-title { font-weight: 600; overflow-wrap: anywhere; }   /* 不叫 .dish-name：翻牌子卡片上的大号菜名占了这个名字 */
+.dish-meta { font-size: 0.75rem; color: var(--ink-faint); }
+.dish-meta b { margin-right: 0.35rem; color: var(--ink); }
+/* 被「别再推这个」按过的菜。用强调色而不是灰色 —— 这是用户主动做过的决定，
+   得能一眼扫到。只写哪天按的，不写「还剩几天」：静音是连续衰减不是开关。 */
+.dish-muted { font-size: 0.74rem; color: var(--accent); }
+.dish-muted .link { padding: 0 0 0 0.4rem; font-size: inherit; }
+.dish-score {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.hearts { font-size: 0.7rem; letter-spacing: -1px; }
+.dish-del {
+  flex: none;
+  width: 1.7rem; height: 1.7rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--chip-plain);
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+/* ---- 添一道菜：收起时是一条虚线框，展开后表单也在虚线框里 ---- */
+.add-dish {
+  margin-top: 0.3rem;
+  padding: 0.6rem 0.8rem;
+  border: 2px dashed var(--paper-line);
+  border-radius: 0.8rem;
+}
+.add-dish > summary {
+  text-align: center;
+  color: var(--ink-faint);
+  font: 700 0.9rem "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+}
+.add-dish[open] > summary { text-align: left; color: var(--ink-soft); }
+
+/* 饭点三选：勾上是饭点色实心胶囊，没勾是虚线空心。复选框本身藏起来
+   （不用 display: none，读屏和键盘还要用它）。 */
+.slot-pills { display: flex; gap: 0.4rem; }
+.slot-pill { flex: 1; position: relative; }
+.slot-pill input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.slot-pill span {
+  display: block;
+  padding: 0.45rem 0;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+.slot-pill input:not(:checked) + span {
+  border: 2px dashed var(--paper-line);
+  background: none;
+  color: var(--ink-faint);
+}
+.slot-pill input:focus-visible + span { outline: 2px solid var(--chip-fg); outline-offset: 2px; }
+
+.shop-acts { display: flex; justify-content: flex-end; gap: 0.6rem; margin: 0.5rem 0 0; }
+.shop-acts .link { color: var(--ink-faint); font-size: 0.74rem; text-decoration: none; }
+
+/* 放在这一段末尾而不是文件前面那个减弱动效块里：同优先级按源码顺序，
+   写在前面会被上面 .shop-block 的 transition 盖掉。 */
+@media (prefers-reduced-motion: reduce) {
+  .form .go, .shop-block { transition: none; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .tab-pill, .tab { transition: none; }

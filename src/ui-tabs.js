@@ -32,12 +32,11 @@ export function currentView() {
 
 /**
  * 状态栏颜色（theme-color）。iOS 拿它涂状态栏那一条（2026-09-23 真机录屏：
- * 状态栏像素与页面底色一致）。翻牌子用渐变顶端的饭点色，御膳房用页面底色。
- * 饭点和深浅色一变、视图一切都要重写，所以 ui-today.js 改完 data-slot 也调它。
+ * 状态栏像素与页面底色一致）。两个视图顶上都是饭点色（翻牌子的渐变、御膳房的封面），
+ * 所以都用渐变顶端的 --board-a。饭点和深浅色一变都要重写，ui-today.js 改完 data-slot 也调它。
  */
 export function paintStatusBar() {
-  const name = currentView() === 'pool' ? '--bg' : '--board-a';
-  const color = getComputedStyle(root).getPropertyValue(name).trim();
+  const color = getComputedStyle(root).getPropertyValue('--board-a').trim();
   if (color) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
 }
 

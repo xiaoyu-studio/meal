@@ -83,35 +83,47 @@
 
 <!-- ============ 御膳房 ============
      id 带 pool- 前缀的是和翻牌子重名、改过名的（失败态那三个）。 -->
+<!-- 御用手账本：顶上是饭点色的封面（线装针脚、书名签、「御」字印），
+     每家店是一页格子纸，卫生标记是盖在店名旁的印章。
+     「加一家店」「加一道菜」的表单平时收在 <details> 里，点开才露出来。 -->
 <section id="view-pool" class="view view-pool" aria-label="御膳房">
 <div class="wrap has-tabbar">
-  <h2 class="page-title">御膳房 <span class="page-sub">候选池</span></h2>
+  <header class="cover">
+    <span class="stitch" aria-hidden="true"></span>
+    <div class="slip">
+      <small aria-hidden="true">御 用 手 账</small>
+      <h2 class="slip-title">御膳房</h2>
+      <span class="seal-big" aria-hidden="true">御</span>
+    </div>
+    <p id="pool-count" class="cover-sub"></p>
+    <p id="io-msg" class="io-msg"></p>
+    <div id="io-row" class="io-row">
+      <button id="export" class="io-chip" type="button">⬇ 备份</button>
+      <label class="io-chip">⬆ 导入<input id="import" type="file" accept="application/json" hidden></label>
+    </div>
+  </header>
 
-  <div id="io-row" class="io-row">
-    <button id="export" class="ghost" type="button">导出备份</button>
-    <label class="ghost import-label">
-      导入备份
-      <input id="import" type="file" accept="application/json" hidden>
-    </label>
-  </div>
-  <p id="io-msg" class="io-msg"></p>
-
-  <form id="shop-form" class="form">
-    <h3 class="form-title">加一家店</h3>
-    <input name="name" placeholder="店名" required>
-    <select name="platform">
-      <option value="meituan">美团外卖</option>
-      <option value="eleme">淘宝闪购（原饿了么）</option>
-    </select>
-    <input name="link" type="url" placeholder="从外卖 App 分享出来的链接" required>
-    <select name="hygiene">
-      <option value="unknown">卫生：未知</option>
-      <option value="trusted">卫生：放心</option>
-      <option value="blocked">卫生：拉黑</option>
-    </select>
-    <p id="shop-msg" class="io-msg"></p>
-    <button class="primary" type="submit">保存店铺</button>
-  </form>
+  <details id="add-shop" class="add-shop">
+    <summary><b aria-hidden="true">＋</b>招一家新店进宫</summary>
+    <form id="shop-form" class="form">
+      <input name="name" placeholder="店名" required>
+      <div class="form-two">
+        <select name="platform" aria-label="平台">
+          <option value="meituan">🛵 美团外卖</option>
+          <option value="eleme">🛍 淘宝闪购（原饿了么）</option>
+        </select>
+        <select name="hygiene" aria-label="卫生">
+          <option value="unknown">卫生：待验</option>
+          <option value="trusted">卫生：放心</option>
+          <option value="blocked">卫生：冷宫（拉黑）</option>
+        </select>
+      </div>
+      <input name="link" type="url" placeholder="从外卖 App 分享出来的链接" required>
+      <p id="shop-msg" class="io-msg"></p>
+      <button class="go" type="submit">宣进来</button>
+      <button class="later" type="button" data-close-details>先不加了</button>
+    </form>
+  </details>
 
   <section id="pool-failure" class="card" hidden>
     <p class="empty-text" id="pool-failure-text"></p>

@@ -1,7 +1,8 @@
-import { SLOTS, SLOT_LABELS } from './config.js';
+import { CONFIG, SLOTS } from './config.js';
 import { buildMutedIndex, reduceObservations } from './observations.js';
 import { tasteOf } from './recommender.js';
 import { snapshotFilename } from './snapshot.js';
+import { dishEmoji } from './emoji.js';
 import { isSafeLink } from './deeplink.js';
 import {
   loadAll, putShop, putDish, deleteShop, deleteDish, setHygiene,
@@ -14,8 +15,14 @@ const el = (id) => document.getElementById(id);
  * 只是显示用的名字。存库的值一律保持 'meituan' / 'eleme' 不变 ——
  * 平台改名跟数据无关，改了 key 会让已有记录和导出的备份全部对不上。
  */
-const PLATFORM_LABELS = { meituan: '美团外卖', eleme: '淘宝闪购' };
-const HYGIENE_LABELS = { unknown: '未知', trusted: '放心', blocked: '已拉黑' };
+const PLATFORM_LABELS = { meituan: '🛵 美团外卖', eleme: '🛍 淘宝闪购' };
+/** 卫生标记的选项文字，和「招一家新店进宫」表单里那组一致。 */
+const HYGIENE_LABELS = { unknown: '待验', trusted: '放心', blocked: '冷宫（拉黑）' };
+/** 印章上的两个字。 */
+const HYGIENE_SEALS = { unknown: '待验', trusted: '放心', blocked: '冷宫' };
+/** 加菜表单里饭点胶囊上的字，比 SLOT_LABELS 短一个字才排得下三个。 */
+const SLOT_PILLS = { breakfast: '🌅 早', lunch: '☀️ 午', dinner: '🌙 晚' };
+const SLOT_SHORT = { breakfast: '早', lunch: '午', dinner: '晚' };
 
 /**
  * 这个页面会把店名、菜名、标签这些用户手填的数据拼进一整段 innerHTML 里
@@ -37,13 +44,20 @@ function esc(s) {
  * 换来一次不可逆的丢数据。导出和「加一家店」收起来只是顺带：留着它们，
  * 用户会对着一个看起来能用的表单白填一遍。
  *
- * 注意 .io-row / .form 在 CSS 里是 flex / grid，必须配合各自的 [hidden]
+ * 注意 .io-row / .add-shop 在 CSS 里设了 display，必须配合各自的 [hidden]
  * 规则才收得掉（见 css/style.css）。
  */
 function setControlsHidden(hidden) {
   el('io-row').hidden = hidden;
   el('io-msg').hidden = hidden;
-  el('shop-form').hidden = hidden;
+  el('add-shop').hidden = hidden;
+}
+
+/** 好吃度画成几颗心。一条带分数的记录都没有时返回 null —— 那时 tasteOf 给的
+ *  是冷启动的乐观初值 0.7，画出来是四颗心，像是吃过而且挺好吃，其实是没尝过。 */
+function heartsOf(obs, now) {
+  if (!obs.some((o) => o.value !== null && o.value !== undefined)) return null;
+  return Math.round(tasteOf(obs, now) * CONFIG.TASTE_HEARTS);
 }
 
 let toastTimer = null;
@@ -147,6 +161,12 @@ async function render() {
     // 要在列表里找半天。没有 createdAt 的老店（这个字段 2026-09-20 才加）
     // 一律排在后面，彼此保持原来的相对顺序，所以既有列表的样子不变。
     const createdAt = (s) => (typeof s.createdAt === 'number' ? s.createdAt : -Infinity);
+    const shopIds = new Set(shops.map((s) => s.id));
+    const dishCount = dishes.filter((d) => shopIds.has(d.shopId)).length;
+    el('pool-count').textContent = shops.length
+      ? `${shops.length} 家店 · ${dishCount} 道菜候旨`
+      : '还没有店，先招一家进来';
+
     el('shops').innerHTML = shops
       .slice()
       .sort((a, b) => createdAt(b) - createdAt(a))
@@ -155,28 +175,33 @@ async function render() {
           .filter((d) => d.shopId === shop.id)
           .map((d) => {
             const obs = obsByDish.get(d.id) ?? [];
-            const taste = tasteOf(obs, now).toFixed(2);
+            const hearts = heartsOf(obs, now);
             const eatenCount = obs.filter((o) => o.eaten).length;
-            const slotText = (d.slots ?? []).map((s) => SLOT_LABELS[s] ?? s).join('/');
-            // 挂在左半边而不是右边的 .dish-stat：那一栏是 white-space: nowrap，
-            // 再往里塞会在 375px 上把菜名挤没。
-            // 375px 下左栏只有 126px，「¥31・午/晚」加上这段一定会换行 ——
-            // 所以干脆写成独占一行（CSS 里 display: block），不要用「・」当
-            // 行内分隔符：一换行那个点就吊在行首，像个没擦掉的字符。
+            const slotText = (d.slots ?? []).map((s) => SLOT_SHORT[s] ?? s).join(' · ');
+            const scoreHtml = hearts === null
+              ? '<span class="dish-score">还没尝过</span>'
+              : `<span class="dish-score">
+                  <span class="hearts" role="img" aria-label="好吃度 ${hearts} / ${CONFIG.TASTE_HEARTS}">` +
+                  '❤️'.repeat(hearts) + '🤍'.repeat(CONFIG.TASTE_HEARTS - hearts) +
+                  `</span>吃过 ${eatenCount} 次</span>`;
+            // 静音状态独占菜名下面一行，「取消」挨着它改的那个状态放，
+            // 不跟右边的 ✕ 挨着，免得点错（spec 2026-09-14 §4.1）。
             const mutedKey = muted.get(d.id);
-            // 「取消」挨着它改的那个状态放，不放右栏：右栏是 nowrap，
-            // 再塞一个按钮会把菜名挤没，而且跟「删」挨着容易点错（spec 2026-09-14 §4.1）。
             const mutedHtml = mutedKey
-              ? `<span class="dish-muted">已静音 · ${esc(mutedKey.slice(5))}` +
+              ? `<span class="dish-muted">🔕 ${esc(mutedKey.slice(5))} 起歇着` +
                 `<button class="link" data-unmute-dish="${esc(d.id)}" type="button">取消</button></span>`
               : '';
             return `
               <div class="dish-row">
-                <span>${esc(d.name)}　<span class="shop-meta">¥${esc(d.refPrice)}・${esc(slotText)}</span>${mutedHtml}</span>
-                <span class="dish-stat">
-                  好吃度 ${taste}・吃过 ${eatenCount} 次
-                  <button class="link" data-del-dish="${esc(d.id)}" type="button">删</button>
+                <span class="dish-emo" aria-hidden="true">${dishEmoji(d.name)}</span>
+                <span class="dish-main">
+                  <span class="dish-title">${esc(d.name)}</span>
+                  <span class="dish-meta"><b>¥${esc(d.refPrice)}</b>${esc(slotText)}</span>
+                  ${mutedHtml}
                 </span>
+                ${scoreHtml}
+                <button class="dish-del" data-del-dish="${esc(d.id)}" type="button"
+                  aria-label="删掉「${esc(d.name)}」">✕</button>
               </div>`;
           })
           .join('');
@@ -184,49 +209,56 @@ async function render() {
         // 渲染已存的链接同样要过协议白名单 —— 这个检查是 Task 15 才加的，
         // 早先存进库里的坏数据不能靠"以后不会再存进去"就当没事。
         const linkHtml = isSafeLink(shop.link)
-          // class="link" 跟同一行的「链接失效了？」「删店」保持一致 —— 不加的话
-          // 它是浏览器默认的亮蓝色，在这套暖色调里很扎眼。
-          ? `<a class="link" href="${esc(shop.link)}">跳转链接</a>`
-          : `<span class="shop-blocked">链接无效，请点"链接失效了？"重新粘贴</span>`;
+          ? `<a class="chip" href="${esc(shop.link)}">🔗 去店里</a>`
+          : '<span class="chip chip-bad">链接无效，点「换链接」重新粘贴</span>';
 
+        // 卫生标记是一枚印章，印章上盖着一个透明的 <select>：点印章就弹系统的选择框。
+        // 「吃坏了」一次点击就拉黑、不做二次确认，这里是它的回头路（见下面 change 事件）。
+        const hygiene = HYGIENE_SEALS[shop.hygiene] ? shop.hygiene : 'unknown';
         return `
-          <section class="shop-block" data-shop="${esc(shop.id)}">
+          <section class="shop-block${hygiene === 'blocked' ? ' shop-cold' : ''}" data-shop="${esc(shop.id)}">
+            <span class="ribbon" aria-hidden="true"></span>
             <div class="shop-head">
               <p class="shop-title">${esc(shop.name)}</p>
-              <span class="shop-meta ${shop.hygiene === 'blocked' ? 'shop-blocked' : ''}">
-                ${esc(PLATFORM_LABELS[shop.platform] ?? shop.platform)}・卫生${esc(HYGIENE_LABELS[shop.hygiene] ?? shop.hygiene)}
-              </span>
-            </div>
-            <p class="shop-meta hygiene-row">
-              <label>
-                卫生标记
-                <select class="hygiene-select" data-hygiene="${esc(shop.id)}">
+              <label class="seal seal-${hygiene}">
+                <span aria-hidden="true">${HYGIENE_SEALS[hygiene]}</span>
+                <select class="hygiene-select" data-hygiene="${esc(shop.id)}" aria-label="卫生标记">
                   ${Object.entries(HYGIENE_LABELS)
                     .map(([v, label]) =>
-                      `<option value="${v}"${shop.hygiene === v ? ' selected' : ''}>${label}</option>`)
+                      `<option value="${v}"${hygiene === v ? ' selected' : ''}>${label}</option>`)
                     .join('')}
                 </select>
               </label>
-            </p>
-            <p class="shop-meta">
+            </div>
+            <p class="chips">
+              <span class="chip">${esc(PLATFORM_LABELS[shop.platform] ?? shop.platform)}</span>
               ${linkHtml}
-              <button class="link" data-fix-link="${esc(shop.id)}" type="button">链接失效了？</button>
-              <button class="link" data-del-shop="${esc(shop.id)}" type="button">删店</button>
             </p>
             ${rows}
-            <form class="form" data-dish-form="${esc(shop.id)}">
-              <input name="name" placeholder="菜名" required>
-              <input name="refPrice" type="number" step="0.01" inputmode="decimal" placeholder="参考价" required>
-              <input name="tags" placeholder="标签，逗号分隔（如：川菜,辣）">
-              <label class="shop-meta">适用饭点</label>
-              ${SLOTS.map(
-                (s) => `<label class="shop-meta">
-                  <input type="checkbox" name="slots" value="${s}" checked> ${SLOT_LABELS[s]}
-                </label>`,
-              ).join('')}
-              <p class="io-msg" data-dish-msg></p>
-              <button class="ghost" type="submit">加这道菜</button>
-            </form>
+            <details class="add-dish">
+              <summary>＋ 添一道菜</summary>
+              <form class="form" data-dish-form="${esc(shop.id)}">
+                <div class="form-two">
+                  <input name="name" placeholder="菜名" required>
+                  <input name="refPrice" type="number" step="0.01" inputmode="decimal" placeholder="参考价 ¥" required>
+                </div>
+                <input name="tags" placeholder="标签，逗号分隔（如：川菜,辣）">
+                <div class="slot-pills" role="group" aria-label="适用饭点">
+                  ${SLOTS.map(
+                    (s) => `<label class="slot-pill">
+                      <input type="checkbox" name="slots" value="${s}" checked><span>${SLOT_PILLS[s]}</span>
+                    </label>`,
+                  ).join('')}
+                </div>
+                <p class="io-msg" data-dish-msg></p>
+                <button class="go" type="submit">添上</button>
+                <button class="later" type="button" data-close-details>先不添了</button>
+              </form>
+            </details>
+            <p class="shop-acts">
+              <button class="link" data-fix-link="${esc(shop.id)}" type="button">换链接</button>
+              <button class="link" data-del-shop="${esc(shop.id)}" type="button">删店</button>
+            </p>
           </section>`;
       })
       .join('');
@@ -265,6 +297,7 @@ el('shop-form').addEventListener('submit', async (e) => {
     });
     msg.textContent = '';
     e.target.reset();
+    el('add-shop').open = false;
     await render();
     // 新店现在会排在表单正下方（按 createdAt 倒序），但列表长了照样要滚动，
     // 提示仍然有用：没有它，用户会以为没保存上又填一遍。
@@ -394,6 +427,17 @@ el('shops').addEventListener('click', async (e) => {
     console.error('操作失败', err);
     el('io-msg').textContent = '操作失败，请稍后重试。';
   }
+});
+
+// 「先不加了」「先不添了」：收起表单，填了一半的也清掉 —— 下次点开是一张空表。
+el('view-pool').addEventListener('click', (e) => {
+  const button = e.target.closest('[data-close-details]');
+  if (!button) return;
+  const form = button.closest('form');
+  form?.reset();
+  for (const msg of form?.querySelectorAll('.io-msg') ?? []) msg.textContent = '';
+  const details = button.closest('details');
+  if (details) details.open = false;
 });
 
 el('export').addEventListener('click', async () => {
