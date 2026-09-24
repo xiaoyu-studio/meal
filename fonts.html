@@ -24,6 +24,8 @@
   p { margin: 0.4rem 0; }
   .note { color: var(--muted); font-size: 0.85rem; }
   .status { padding: 0.7rem 0.9rem; border-radius: 0.8rem; background: var(--card); border: 1px solid var(--line); }
+  /* 在电脑上打开时两行一模一样，很容易以为「没区别」—— 提示要大、要醒目。 */
+  .status.absent { border: 2px solid #d4622a; background: var(--miss); font-size: 1.15rem; font-weight: 700; }
   .missing-list { font-size: 1.3rem; letter-spacing: 0.15em; overflow-wrap: anywhere; }
   .controls { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0 0; font-size: 0.9rem; }
   textarea {
@@ -168,7 +170,9 @@ function fill(id, list, big) {
 function updateStatus() {
   const s = document.getElementById('status');
   if (!present) {
-    s.textContent = '这台设备上没有冬青圆体（Windows、安卓都没有），下面两行会一模一样。请在 iPhone 上打开。';
+    s.classList.add('absent');
+    s.textContent = '⚠️ 这台设备上没有冬青圆体（Windows、安卓都没有），下面每组两行会一模一样，看不出区别。'
+      + '请用 iPhone 的 Safari 打开这个页面。';
     return;
   }
   s.replaceChildren(
