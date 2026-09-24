@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>字体对比</title>
+<!-- 临时页面：看 iPhone 自带的「冬青圆体」（Hiragino Maru Gothic ProN）配中文好不好看、
+     缺哪些字。定下来用不用之后就删。不属于 App，App 里没有入口。 -->
+<style>
+  :root { --bg: #faf8f5; --fg: #1c1a17; --muted: #6f6a63; --line: #e8e3dc; --card: #fff; --miss: #ffd6cc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17150f; --fg: #f0ece5; --muted: #9a938a; --line: #35302a; --card: #221f19; --miss: #6b2c1c; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: calc(env(safe-area-inset-top) + 1rem) 1rem calc(env(safe-area-inset-bottom) + 2rem);
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.6 -apple-system, "PingFang SC", sans-serif;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1rem; margin: 1.8rem 0 0.6rem; color: var(--muted); }
+  p { margin: 0.4rem 0; }
+  .note { color: var(--muted); font-size: 0.85rem; }
+  .status { padding: 0.7rem 0.9rem; border-radius: 0.8rem; background: var(--card); border: 1px solid var(--line); }
+  .missing-list { font-size: 1.3rem; letter-spacing: 0.15em; overflow-wrap: anywhere; }
+  .controls { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0 0; font-size: 0.9rem; }
+  textarea {
+    width: 100%; min-height: 4.5rem; margin-top: 0.4rem; padding: 0.6rem;
+    border: 1px solid var(--line); border-radius: 0.6rem; background: var(--card); color: var(--fg);
+    font-size: 16px;   /* 小于 16px 时 iOS 聚焦会放大页面 */
+  }
+  .pair { padding: 0.6rem 0.8rem; margin-bottom: 0.6rem; border-radius: 0.8rem; background: var(--card); border: 1px solid var(--line); }
+  .row { display: flex; gap: 0.6rem; align-items: baseline; }
+  .tag { flex: none; width: 2.2rem; font-size: 0.7rem; color: var(--muted); }
+  .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
+  .hei { font-family: var(--font-b, "PingFang SC", sans-serif); }
+  .maru { font-family: var(--font-a, "Hiragino Maru Gothic ProN", "PingFang SC", sans-serif); }
+  .big .txt { font-size: 1.9rem; }
+  .bold .txt { font-weight: 700; }
+  mark { background: var(--miss); color: inherit; border-radius: 3px; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+  <h1>字体对比：黑体 / 冬青圆体</h1>
+  <p class="note">每组上面一行是现在用的苹方黑体，下面一行是 iPhone 自带的冬青圆体（日文圆体）。
+    <mark>标红底的字</mark>是冬青圆体里没有、iPhone 自动拿黑体补上的。</p>
+
+  <p id="status" class="status">正在检查…</p>
+
+  <div class="controls">
+    <label><input type="checkbox" id="bold" checked> 加粗（菜名、按钮是粗体；冬青圆体只有一种粗细，粗体是系统硬描出来的）</label>
+  </div>
+
+  <h2>自己输入一段看看</h2>
+  <textarea id="own" placeholder="比如把你常吃的几道菜名粘贴进来，一行一个"></textarea>
+  <div id="own-out"></div>
+
+  <h2 id="mine-title">你的菜名和店名</h2>
+  <p id="mine-note" class="note"></p>
+  <div id="mine"></div>
+
+  <h2>界面上的文字</h2>
+  <div id="ui"></div>
+
+  <h2>常见外卖菜名和店名</h2>
+  <div id="common"></div>
+
+  <p class="note" style="margin-top:2rem"><a href="index.html">回到 App</a></p>
+
+<script type="module">
+import { loadAll } from './src/store.js';
+
+const UI_BIG = ['今天这顿', '翻牌子', '御膳房', '去下单', '招一家新店进宫', '宣进来', '添上'];
+const UI = [
+  '早餐 午餐 晚餐', '早上吃这个？ 中午吃这个？ 今晚吃这个？',
+  '还没试过，试试看', '你上次说好吃', '评价一直不错', '同类里最便宜', '好久没吃了', '换换口味',
+  '复制店名　别再推这个', '← 上一个　划一划换一个　下一个 →',
+  '上顿的小炒肉盖饭怎么样？', '好吃　还行　不了　没吃成　吃坏了', '填实付价　保存',
+  '御用手账　3 家店 · 12 道菜候旨', '放心　待验　冷宫（拉黑）', '还没尝过　吃过 3 次',
+  '🔕 09-20 起歇着 · 取消', '＋ 添一道菜　先不添了　先不加了', '换链接　删店　去店里',
+  '美团外卖　淘宝闪购', '已添加「番茄牛腩饭」', '删掉这家店？它名下所有菜品也会一并删除。',
+  '候选池里这一顿没有可推的。', '本地存储读取失败，请稍后重试。',
+];
+const COMMON = [
+  '小炒肉盖饭', '番茄炒蛋盖浇饭', '黄焖鸡米饭', '酸菜鱼', '宫保鸡丁饭', '鱼香肉丝', '红烧牛肉面',
+  '兰州牛肉拉面', '沙县蒸饺', '煎饼果子', '皮蛋瘦肉粥', '豆浆油条', '肉夹馍', '凉皮', '螺蛳粉',
+  '过桥米线', '韩式石锅拌饭', '豚骨拉面加溏心蛋', '水煮鱼', '回锅肉', '麻婆豆腐', '卤肉饭',
+  '鸡排饭', '鲜肉馄饨', '猪肉白菜饺子', '炸酱面', '热干面', '担担面', '冒菜', '北京烤鸭',
+  '轻食鸡胸沙拉', '珍珠奶茶', '生椰拿铁',
+  '老乡鸡', '杨国福麻辣烫', '沙县小吃', '肯德基', '麦当劳', '喜茶', '瑞幸咖啡', '一风堂', '巷口小炒',
+];
+
+/* 判断冬青圆体有没有某个字：同一个字用「冬青圆体, 苹方」和「只用苹方」各画一遍，
+   像素完全一样，说明冬青圆体里没有这个字、退回了苹方。
+   必须按字母基线对齐（alphabetic）：按顶端对齐时，顶端位置取的是列表里第一款字体的尺寸，
+   就算退回了苹方也会错开几个像素，永远判成「有」—— 桌面上拿 Arial 对照试出来的。 */
+const canvas = document.createElement('canvas');
+canvas.width = canvas.height = 64;
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+function pixels(ch, family) {
+  ctx.clearRect(0, 0, 64, 64);
+  ctx.font = `40px ${family}`;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(ch, 4, 48);
+  return ctx.getImageData(0, 0, 64, 64).data;
+}
+// 地址里可以换字体来比：fonts.html?a=候选字体&b=底字体（默认冬青圆体 / 苹方）。
+const params = new URLSearchParams(location.search);
+const A = params.get('a') || 'Hiragino Maru Gothic ProN';
+const B = params.get('b') || 'PingFang SC';
+const HEI = `"${B}", sans-serif`;
+const MARU = `"${A}", "${B}", sans-serif`;
+document.documentElement.style.setProperty('--font-a', MARU);
+document.documentElement.style.setProperty('--font-b', HEI);
+const cache = new Map();
+function maruHas(ch) {
+  if (!/[㐀-鿿豈-﫿]/.test(ch)) return true;   // 只查汉字；数字、标点、emoji 不算
+  if (!cache.has(ch)) cache.set(ch, differs(ch));
+  return cache.get(ch);
+}
+// 平假名「あ」冬青圆体一定有；它跟苹方画出来一样，说明这台设备上根本没有冬青圆体。
+function differs(ch) {
+  const a = pixels(ch, MARU), b = pixels(ch, HEI);
+  for (let i = 3; i < a.length; i += 4) if (a[i] !== b[i]) return true;
+  return false;
+}
+const present = differs('あ');
+
+const missing = new Set();
+const allHan = new Set();
+
+function line(tag, cls, text, markMissing) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  const t = document.createElement('span');
+  t.className = 'tag';
+  t.textContent = tag;
+  const out = document.createElement('span');
+  out.className = `txt ${cls}`;
+  for (const ch of text) {
+    if (markMissing && !maruHas(ch)) {
+      const m = document.createElement('mark');
+      m.textContent = ch;
+      out.append(m);
+    } else out.append(ch);
+  }
+  row.append(t, out);
+  return row;
+}
+
+function pair(text, big) {
+  for (const ch of text) if (/[㐀-鿿豈-﫿]/.test(ch)) { allHan.add(ch); if (!maruHas(ch)) missing.add(ch); }
+  const box = document.createElement('div');
+  box.className = 'pair' + (big ? ' big' : '');
+  box.append(line('黑体', 'hei', text, false), line('圆体', 'maru', text, present));
+  return box;
+}
+
+function fill(id, list, big) {
+  const el = document.getElementById(id);
+  el.replaceChildren(...list.map((t) => pair(t, big)));
+}
+
+function updateStatus() {
+  const s = document.getElementById('status');
+  if (!present) {
+    s.textContent = '这台设备上没有冬青圆体（Windows、安卓都没有），下面两行会一模一样。请在 iPhone 上打开。';
+    return;
+  }
+  s.replaceChildren(
+    `页面上一共 ${allHan.size} 个不同的汉字，冬青圆体缺 ${missing.size} 个`
+      + (missing.size ? '：' : '。'),
+    Object.assign(document.createElement('div'), { className: 'missing-list', textContent: [...missing].join('') }),
+  );
+}
+
+document.getElementById('bold').addEventListener('change', (e) => {
+  document.body.classList.toggle('bold', e.target.checked);
+});
+document.body.classList.add('bold');
+
+document.getElementById('own').addEventListener('input', (e) => {
+  const lines = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean);
+  document.getElementById('own-out').replaceChildren(...lines.map((t) => pair(t, true)));
+  updateStatus();
+});
+
+fill('ui', UI_BIG, true);
+document.getElementById('ui').append(...UI.map((t) => pair(t, false)));
+fill('common', COMMON, true);
+
+try {
+  const { shops, dishes } = await loadAll();
+  const names = [...dishes.map((d) => d.name), ...shops.map((s) => s.name)].filter(Boolean);
+  if (names.length) {
+    fill('mine', [...new Set(names)], true);
+  } else {
+    document.getElementById('mine-note').textContent =
+      '这里读不到你的菜：在 Safari 里打开时，看不到主屏 App 里的数据（两边存储是分开的）。'
+      + '可以把菜名粘贴到上面的输入框里。';
+  }
+} catch {
+  document.getElementById('mine-note').textContent = '读不到本地数据。可以把菜名粘贴到上面的输入框里。';
+}
+updateStatus();
+</script>
+</body>
+</html>
