@@ -121,6 +121,25 @@ document.addEventListener('click', (e) => {
 // switchTo 自己用 replaceState 改地址，不会触发这个事件。
 window.addEventListener('hashchange', () => switchTo(location.hash === '#pool' ? 'pool' : 'today'));
 
+// 文档本身从不滚动（能滚的只有御膳房视图），但键盘弹起时 iOS 会把整个文档往上推，
+// 好让输入框露出来；主屏 App 里键盘收起后有时不推回来 —— 2026-09-24 真机：录完菜收起键盘，
+// 整页停在上移约 377pt 的位置，TabBar 跑到屏幕中间，下面一大片空底色。
+// 所以文档一被滚动、而且眼下没有输入框在用键盘，就滚回顶上。
+// 输入框之间跳转时会先 focusout 再 focusin，等一拍再看，免得在键盘还开着时把框推走。
+function isTyping() {
+  const a = document.activeElement;
+  return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
+function pinDocument() {
+  if (window.scrollX === 0 && window.scrollY === 0) return;
+  if (isTyping()) return;
+  window.scrollTo(0, 0);
+}
+const pinSoon = () => setTimeout(pinDocument, 0);
+document.addEventListener('focusout', pinSoon);
+window.addEventListener('scroll', pinSoon, { passive: true });
+window.visualViewport?.addEventListener('resize', pinSoon);
+
 // 系统深浅色切换时两套底色都会变，状态栏跟着重写。
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', paintStatusBar);
 
