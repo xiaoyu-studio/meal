@@ -71,7 +71,8 @@
   <p class="note" style="margin-top:2rem"><a href="index.html">回到 App</a></p>
 
 <script type="module">
-import { loadAll } from './src/store.js';
+// 读库用动态 import、放在最后的 try 里：直接双击打开（file://）时浏览器会拦下
+// src/store.js，写成顶部的静态 import 会让整段脚本一行都不跑，页面只剩「正在检查…」。
 
 const UI_BIG = ['今天这顿', '翻牌子', '御膳房', '去下单', '招一家新店进宫', '宣进来', '添上'];
 const UI = [
@@ -191,8 +192,10 @@ document.getElementById('own').addEventListener('input', (e) => {
 fill('ui', UI_BIG, true);
 document.getElementById('ui').append(...UI.map((t) => pair(t, false)));
 fill('common', COMMON, true);
+updateStatus();   // 先出结果；读库可能慢，读完再更新一次
 
 try {
+  const { loadAll } = await import('./src/store.js');
   const { shops, dishes } = await loadAll();
   const names = [...dishes.map((d) => d.name), ...shops.map((s) => s.name)].filter(Boolean);
   if (names.length) {
