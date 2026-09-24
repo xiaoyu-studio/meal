@@ -502,6 +502,23 @@ html.switching .view { visibility: visible; }
   font-family: "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
 }
 
+/* 菜名最多 3 行、店名最多 2 行，多出来的用「…」收掉。纸是锁在一屏里的定高，
+   名字没有长度上限：2026-09-24 真机上一道 54 字的菜名把「去下单」和下面几行
+   挤出了纸面、压到 TabBar 底下。完整的名字在御膳房里看。
+   flex-shrink: 0 让行数只由 line-clamp 决定 —— 不然纸不够高时 flex 会再把它
+   压矮，切在半行上，连省略号都没有。 */
+.dish-name,
+.shop-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  flex-shrink: 0;
+}
+.dish-name { -webkit-line-clamp: 3; line-clamp: 3; }
+/* 店名在横排的 .meta-row 里，不封顶宽度会按整段文字的长度撑开、一行冲出纸外。 */
+.shop-name { -webkit-line-clamp: 2; line-clamp: 2; max-width: 100%; }
+
 .meta-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
 .shop-name { margin: 0; color: var(--ink-soft); font-size: 1rem; }
 /* 价格没有框也没有圈，只能靠字号撑起分量。 */
