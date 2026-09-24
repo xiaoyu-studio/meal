@@ -204,9 +204,17 @@ function paintNote(note, i) {
   const shop = state.shops.find((s) => s.id === row.dish.shopId);
   const q = (sel) => note.querySelector(sel);
   q('.slot-label').textContent = SLOT_LABELS[state.slot];
-  q('.dish-name').textContent = row.dish.name;
+  // 菜名包一层行内 span：荧光笔那道底色要贴着字走、换行时每行各涂一道，
+  // 涂在块级的 h1 上会是整行宽的一条。
+  const hl = document.createElement('span');
+  hl.className = 'hl';
+  hl.textContent = row.dish.name;
+  q('.dish-name').replaceChildren(hl);
   q('.shop-name').textContent = shop.name;
-  q('.price').textContent = `约 ¥${row.dish.refPrice}`;
+  // 「约」单独小一号、细一点，价格数字才是重点。
+  const approx = document.createElement('small');
+  approx.textContent = '约';
+  q('.price').replaceChildren(approx, `¥${row.dish.refPrice}`);
   q('.reason').textContent = row.reason;
   // 拍立得：emoji 按菜名猜，猜不着退回 🍽️；下面那行字跟着饭点走。
   q('.pic').textContent = dishEmoji(row.dish.name);

@@ -230,6 +230,8 @@ html.switching #feedback { display: none; }
   --paper-ghost: #fffdf7;
   --tape: rgba(255, 214, 120, 0.78);
   --frame: #ffffff;
+  --hl: rgba(255, 200, 90, 0.55);   /* 菜名底下的荧光笔 */
+  --price: #e0542d;                  /* 价格：橙红 */
   --board-a: #3b2a52;
   --board-b: #2a1f3d;
   --chip-bg: #e6dcff;
@@ -248,6 +250,8 @@ html.switching #feedback { display: none; }
     --paper-ghost: #2f2822;
     --tape: rgba(206, 170, 96, 0.55);   /* 压暗，否则夜里胶带在发光 */
     --frame: #e4dbcd;
+    --hl: rgba(214, 150, 50, 0.45);  /* 深棕纸上压暗，不发光 */
+    --price: #ff7a52;                 /* 深底上提亮一档，不然发闷 */
   }
 }
 
@@ -457,7 +461,7 @@ html.switching .view { visibility: visible; }
   text-align: center;
   font-size: 0.62rem;
   color: #9a8977;
-  font-family: "Yuanti SC", "PingFang SC", sans-serif;
+  font-family: "PingFang SC", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   .polaroid .pic { background: linear-gradient(150deg, #e3c4a2, #ddadb8); }
@@ -490,16 +494,26 @@ html.switching .view { visibility: visible; }
   transform: rotate(-1.2deg);
 }
 
-/* Yuanti SC 是 iOS/macOS 自带的圆体，Windows/Android 上会退回苹方 ——
-   这处差别只有真机看得出来（验收第 27 条）。不打包字体：一个中文子集
-   至少几百 KB，违反零依赖也拖慢首屏。
+/* 字体只用苹方：iPhone 上简体字全的中文字体只有它一款。原来写的圆体-简只有 Mac 有，
+   iPhone 上一直在退回苹方；日文的冬青圆体缺简体专用字，混排难看（2026-09-24 真机对比，
+   验收第 27 条）。所以不换字体，靠粗细、字距和装饰让它不那么硬 —— 用户在四版草图里选的
+   「粗细对比 + 荧光笔」：菜名中粗、字距放开、底下一道荧光笔；店名和次要按钮细体；
+   「约」小一号；价格橙红。苹方有 300 / 400 / 600 这几档，700 也是落到 600。
    max-width 是给拍立得让地方，不能去掉，否则长菜名会压到相框底下。 */
 .dish-name {
   margin: 0.9rem 0 0.6rem;
   max-width: 72%;
   font-size: 2.2rem;
+  font-weight: 600;
   line-height: 1.22;
-  font-family: "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  letter-spacing: 0.04em;
+}
+/* 荧光笔：只涂字的下半截。clone 让折行后的每一行都各自带左右留白。 */
+.dish-name .hl {
+  padding: 0 0.08em;
+  background: linear-gradient(transparent 58%, var(--hl) 58%, var(--hl) 92%, transparent 92%);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 /* 菜名最多 3 行、店名最多 2 行，多出来的用「…」收掉。纸是锁在一屏里的定高，
@@ -520,9 +534,10 @@ html.switching .view { visibility: visible; }
 .shop-name { -webkit-line-clamp: 2; line-clamp: 2; max-width: 100%; }
 
 .meta-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
-.shop-name { margin: 0; color: var(--ink-soft); font-size: 1rem; }
-/* 价格没有框也没有圈，只能靠字号撑起分量。 */
-.price { margin: 0; font-size: 1.4rem; font-weight: 700; }
+.shop-name { margin: 0; color: var(--ink-soft); font-size: 1rem; font-weight: 300; letter-spacing: 0.08em; }
+/* 价格没有框也没有圈，靠字号和颜色撑起分量。 */
+.price { margin: 0; color: var(--price); font-size: 1.4rem; font-weight: 600; }
+.price small { margin-right: 0.15rem; font-size: 0.8rem; font-weight: 300; }
 
 /* 下边距是内容区与按钮区之间的最小间隔，屏幕矮时两块不会贴在一起。 */
 .reason {
@@ -533,6 +548,7 @@ html.switching .view { visibility: visible; }
   background: var(--chip-bg);
   color: var(--chip-fg);
   font-size: 0.95rem;
+  letter-spacing: 0.03em;
   transform: rotate(0.9deg);
 }
 
@@ -544,6 +560,10 @@ html.switching .view { visibility: visible; }
   border-radius: 999px;
   background: linear-gradient(100deg, #ff8a3d, #ff5f9e);
   box-shadow: 0 6px 0 #c23f78;
+  /* 字距拉开：「去 下 单」。letter-spacing 会在最后一个字后面也留一截空，
+     用同样宽的 text-indent 把整行推回正中。 */
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 .board .primary:active { transform: translateY(5px); box-shadow: 0 1px 0 #c23f78; }
@@ -562,6 +582,8 @@ html.switching .view { visibility: visible; }
   border: 2px solid var(--paper-line);
   background: var(--paper-ghost);
   color: var(--ink-faint);
+  font-weight: 300;
+  letter-spacing: 0.1em;
 }
 
 /* 「上一个 / 下一个」是最下面一行的两个角标，中间夹一句「划一划换一个」。
@@ -677,7 +699,7 @@ html[data-view="pool"] .tab-pill { transform: translateX(calc(100% + 0.4rem)) ro
   border-radius: 999px;
   color: var(--ink-faint);
   text-decoration: none;
-  font-family: "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  font-family: "PingFang SC", -apple-system, sans-serif;
   font-size: 0.95rem;
   font-weight: 700;
   -webkit-tap-highlight-color: transparent;
@@ -775,7 +797,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
 .slip small { display: block; font-size: 0.7rem; color: var(--ink-faint); letter-spacing: 0.3em; }
 .slip-title {
   margin: 0;
-  font: 700 1.9rem/1.2 "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  font: 700 1.9rem/1.2 "PingFang SC", -apple-system, sans-serif;
   letter-spacing: 0.12em;
 }
 .seal-big {
@@ -787,7 +809,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   border-radius: 5px;
   background: var(--seal);
   color: #fff;
-  font: 700 1.3rem "Yuanti SC", "PingFang SC", sans-serif;
+  font: 700 1.3rem "PingFang SC", sans-serif;
   box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.5);
   transform: rotate(10deg);
 }
@@ -841,7 +863,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   background: linear-gradient(100deg, #ff8a3d, #ff5f9e);
   box-shadow: 0 5px 0 #c23f78;
   color: #fff;
-  font: 700 1rem "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  font: 700 1rem "PingFang SC", -apple-system, sans-serif;
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
@@ -875,7 +897,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font: 700 1rem "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  font: 700 1rem "PingFang SC", -apple-system, sans-serif;
 }
 .add-shop > summary b {
   width: 1.8rem; height: 1.8rem;
@@ -926,7 +948,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   flex: 1;
   min-width: 0;
   margin: 0;
-  font: 700 1.2rem/1.3 "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  font: 700 1.2rem/1.3 "PingFang SC", -apple-system, sans-serif;
   overflow-wrap: anywhere;
 }
 
@@ -939,7 +961,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   place-items: center;
   padding: 0 0.45rem;
   border-radius: 4px;
-  font: 700 0.72rem/1.05 "Yuanti SC", "PingFang SC", sans-serif;
+  font: 700 0.72rem/1.05 "PingFang SC", sans-serif;
   text-align: center;
   transform: rotate(-8deg);
 }
@@ -1025,7 +1047,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
 .add-dish > summary {
   text-align: center;
   color: var(--ink-faint);
-  font: 700 0.9rem "Yuanti SC", "PingFang SC", -apple-system, sans-serif;
+  font: 700 0.9rem "PingFang SC", -apple-system, sans-serif;
 }
 .add-dish[open] > summary { text-align: left; color: var(--ink-soft); }
 
