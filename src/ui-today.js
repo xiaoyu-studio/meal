@@ -29,7 +29,7 @@ let state = { slot: null, dateKey: null, dish: null, shop: null, ranked: [], ind
 const RATING_LABELS = { good: '好吃', ok: '还行', bad: '不了', skipped: '没吃成' };
 
 /**
- * 渲染补问上一顿的浮层。已评过、就是当前这顿、或下单还没满推迟时长的，都不问——
+ * 渲染补问上一顿的浮层。没点过下单、已评过、就是当前这顿、或下单还没满推迟时长的，都不问——
  * 挑哪一顿在 feedbackCandidate 里，到没到期在 pendingFeedback 里；
  * 这里只负责渲染 pendingFeedback 返回的结果。
  *

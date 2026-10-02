@@ -246,12 +246,17 @@ export function buildMutedIndex(events) {
 /**
  * 该补问哪一顿 —— 不管推迟时长到没到。
  *
- * 优先挑「点过下单、还没评分、又不是当前这顿」里最近的一顿，且只看比最近
- * 一顿已评分更晚的：更早的积压不追问。没有这样的一顿，才退回旧规则 ——
- * 看最近一条观察值。
+ * 只挑「点过下单、还没评分、又不是当前这顿」里最近的一顿，且只看比最近
+ * 一顿已评分更晚的：更早的积压不追问。没有这样的一顿就不问。
  *
- * 为什么优先下过单的：边界前下单、边界后再打开时，页面会为新饭点写一条
- * 没点过的推荐。只看最近一条的话，真正吃了的那顿就被它挡住，永远问不到。
+ * 为什么只问下过单的：每次打开 App 都会为这一顿写一条推荐，看一眼就关的
+ * 那顿也会留下观察值。2026-10-02 以前没有下过单的候选时会退回旧规则，补问
+ * 最近一条 —— 好几天没下单，每次打开都被问「上顿的 X 怎么样」，为了关掉
+ * 浮层答「没吃成」，0.4 就记进了一道根本没碰过的菜（冷启动是 0.7）。
+ * 代价：在 App 外点了同一道菜、没按「去下单」的那顿记不上了。
+ *
+ * 为什么挑最近下过单的、而不是最近一条：边界前下单、边界后再打开时，页面会
+ * 为新饭点写一条没点过的推荐，只看最近一条的话真正吃了的那顿就被它挡住。
  *
  * render() 的守卫（被补问的菜不排开场位）用这个而不是 pendingFeedback：
  * 推迟期间不补问，但刚下单的那道菜同样不该又被端上来。
@@ -280,28 +285,15 @@ export function feedbackCandidate(observations, nowTs, slot, liveDishIds = null)
     if (!isLive(o)) continue;
     if (candidate === null || o.ts > candidate.ts) candidate = o;
   }
-  if (candidate) return candidate;
-
-  // 退回旧规则时同样只看菜还在的那些；一条都不剩就不问。
-  const askable = observations.filter(isLive);
-  if (askable.length === 0) return null;
-  const latest = askable.reduce((a, b) => (b.ts > a.ts ? b : a));
-  // 早于最近一顿已评分的不追问。不过滤时这条判断不改变任何结果（那时 latest
-  // 就是全局最新的一条）；过滤之后它才要紧：已删菜把那条线撑在后面，
-  // 剩下的老记录不该被翻出来重问。
-  if (latest.ts <= lastRatedTs) return null;
-  if (isCurrent(latest)) return null;
-  if (latest.source === 'rated') return null;
-  return latest;
+  return candidate;
 }
 
 /**
  * 下次打开时该补问哪一顿。每次最多返回一条。
  *
  * 下过单的那顿要等 FEEDBACK_DELAY_MINUTES 才问 —— 外卖从下单到吃完要一阵子，
- * 刚下单就问只能逼人随手答个「没吃成」。推迟期间返回 null，**不拿别的记录
- * 顶上**：若改问一顿没下单的，用户随手答了，它就成了最近一顿已评分，
- * 真正下过单的那顿因为比它早而被排除，从此问不到。
+ * 刚下单就问只能逼人随手答个「没吃成」。推迟期间返回 null，不拿别的记录
+ * 顶上 —— 2026-10-02 起没下单的那顿本来就不是候选，这一条自然成立。
  */
 export function pendingFeedback(observations, nowTs, slot, liveDishIds = null) {
   const c = feedbackCandidate(observations, nowTs, slot, liveDishIds);
