@@ -508,10 +508,8 @@ html.switching .view { visibility: visible; }
   line-height: 1.22;
   letter-spacing: 0.04em;
 }
-/* 荧光笔：只涂字的下半截。clone 让折行后的每一行都各自带左右留白。
-   御膳房每页的店名也涂一道（一页一个主标题，跟卡片上的菜名同一个分量）。 */
-.dish-name .hl,
-.shop-title .hl {
+/* 荧光笔：只涂字的下半截。clone 让折行后的每一行都各自带左右留白。 */
+.dish-name .hl {
   padding: 0 0.08em;
   background: linear-gradient(transparent 58%, var(--hl) 58%, var(--hl) 92%, transparent 92%);
   -webkit-box-decoration-break: clone;
@@ -815,7 +813,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.5);
   transform: rotate(10deg);
 }
-.cover-sub { margin: 1rem 0 0; font-size: 0.85rem; font-weight: 300; letter-spacing: 0.06em; opacity: 0.85; }
+.cover-sub { margin: 1rem 0 0; font-size: 0.85rem; opacity: 0.8; }
 /* 导出、导入的结果（「已生成 xxx.json」「导入失败」）写在封面上，白字。 */
 .cover .io-msg { margin: 0.3rem 0 0; color: #fff; font-size: 0.8rem; opacity: 0.9; }
 .cover .io-msg:empty { display: none; }
@@ -865,9 +863,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   background: linear-gradient(100deg, #ff8a3d, #ff5f9e);
   box-shadow: 0 5px 0 #c23f78;
   color: #fff;
-  font: 600 1rem "PingFang SC", -apple-system, sans-serif;
-  letter-spacing: 0.3em;   /* 「宣 进 来」，同翻牌子的「去 下 单」 */
-  text-indent: 0.3em;
+  font: 700 1rem "PingFang SC", -apple-system, sans-serif;
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
@@ -877,8 +873,6 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   background: none;
   color: var(--ink-faint);
   font-size: 0.8rem;
-  font-weight: 300;
-  letter-spacing: 0.1em;
   cursor: pointer;
 }
 
@@ -903,8 +897,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  font: 600 1rem "PingFang SC", -apple-system, sans-serif;
-  letter-spacing: 0.06em;
+  font: 700 1rem "PingFang SC", -apple-system, sans-serif;
 }
 .add-shop > summary b {
   width: 1.8rem; height: 1.8rem;
@@ -951,14 +944,11 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
 .shop-block:nth-child(even) .ribbon { right: 6rem; }
 
 .shop-head { display: flex; align-items: flex-start; gap: 0.6rem; }
-/* 排版同翻牌子卡片（见 .dish-name 上面那段注释）：主标题中粗 + 荧光笔，
-   价格橙红，次要的字细体、字距放开。 */
 .shop-title {
   flex: 1;
   min-width: 0;
   margin: 0;
-  font: 600 1.2rem/1.4 "PingFang SC", -apple-system, sans-serif;
-  letter-spacing: 0.04em;
+  font: 700 1.2rem/1.3 "PingFang SC", -apple-system, sans-serif;
   overflow-wrap: anywhere;
 }
 
@@ -995,8 +985,6 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   background: var(--chip-plain);
   color: var(--ink-soft);
   font-size: 0.75rem;
-  font-weight: 300;
-  letter-spacing: 0.04em;
   text-decoration: none;
 }
 .chip-bad { color: var(--accent); }
@@ -1020,9 +1008,9 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   transform: rotate(-4deg);
 }
 .dish-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.dish-title { font-weight: 600; letter-spacing: 0.03em; overflow-wrap: anywhere; }   /* 不叫 .dish-name：翻牌子卡片上的大号菜名占了这个名字 */
-.dish-meta { font-size: 0.75rem; font-weight: 300; letter-spacing: 0.05em; color: var(--ink-faint); }
-.dish-meta b { margin-right: 0.4rem; color: var(--price); font-size: 0.85rem; font-weight: 600; letter-spacing: 0; }
+.dish-title { font-weight: 600; overflow-wrap: anywhere; }   /* 不叫 .dish-name：翻牌子卡片上的大号菜名占了这个名字 */
+.dish-meta { font-size: 0.75rem; color: var(--ink-faint); }
+.dish-meta b { margin-right: 0.35rem; color: var(--ink); }
 /* 被「别再推这个」按过的菜。用强调色而不是灰色 —— 这是用户主动做过的决定，
    得能一眼扫到。只写哪天按的，不写「还剩几天」：静音是连续衰减不是开关。 */
 .dish-muted { font-size: 0.74rem; color: var(--accent); }
@@ -1033,8 +1021,6 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   flex-direction: column;
   align-items: flex-end;
   font-size: 0.7rem;
-  font-weight: 300;
-  letter-spacing: 0.04em;
   color: var(--ink-faint);
   white-space: nowrap;
 }
@@ -1061,8 +1047,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
 .add-dish > summary {
   text-align: center;
   color: var(--ink-faint);
-  font: 300 0.9rem "PingFang SC", -apple-system, sans-serif;
-  letter-spacing: 0.1em;
+  font: 700 0.9rem "PingFang SC", -apple-system, sans-serif;
 }
 .add-dish[open] > summary { text-align: left; color: var(--ink-soft); }
 
@@ -1091,7 +1076,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
 .slot-pill input:focus-visible + span { outline: 2px solid var(--chip-fg); outline-offset: 2px; }
 
 .shop-acts { display: flex; justify-content: flex-end; gap: 0.6rem; margin: 0.5rem 0 0; }
-.shop-acts .link { color: var(--ink-faint); font-size: 0.74rem; font-weight: 300; letter-spacing: 0.1em; text-decoration: none; }
+.shop-acts .link { color: var(--ink-faint); font-size: 0.74rem; text-decoration: none; }
 
 /* 放在这一段末尾而不是文件前面那个减弱动效块里：同优先级按源码顺序，
    写在前面会被上面 .shop-block 的 transition 盖掉。 */

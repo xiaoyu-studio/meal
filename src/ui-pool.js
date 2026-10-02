@@ -219,7 +219,7 @@ async function render() {
           <section class="shop-block${hygiene === 'blocked' ? ' shop-cold' : ''}" data-shop="${esc(shop.id)}">
             <span class="ribbon" aria-hidden="true"></span>
             <div class="shop-head">
-              <p class="shop-title"><span class="hl">${esc(shop.name)}</span></p>
+              <p class="shop-title">${esc(shop.name)}</p>
               <label class="seal seal-${hygiene}">
                 <span aria-hidden="true">${HYGIENE_SEALS[hygiene]}</span>
                 <select class="hygiene-select" data-hygiene="${esc(shop.id)}" aria-label="卫生标记">
