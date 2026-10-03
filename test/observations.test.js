@@ -219,17 +219,18 @@ test('targetTs 指向的组已不存在时退回启发式，事件不丢', () =>
 
 test('连续两天推同一道菜，第二天补评第一天：评分不被今天抢走', () => {
   // 8/22 午餐推了 A（无动作）；8/23 午餐又推了 A，浮层补问 8/22 那顿，
-  // 用户点「好吃」。评分必须落在 8/22，8/23 那顿仍是未评分状态。
+  // 用户点「好吃」，接着在 8/23 这顿又点了下单。评分必须落在 8/22，8/23 那顿仍是未评分状态。
   const obs = reduceObservations([
     ev('recommended', 'A', at(0, 12)),
     ev('recommended', 'A', at(1, 12)),
     { ...ev('rated', 'A', at(1, 12) + 30000, 'lunch', 'good'), targetTs: at(0, 12) },
+    ev('clicked', 'A', at(1, 12) + 60000),
   ]);
   assert.deepEqual(
     obs.map((o) => [o.dateKey, o.source, o.value, o.eaten]),
     [
       ['2026-08-22', 'rated', 1.0, true],
-      ['2026-08-23', 'none', null, false],
+      ['2026-08-23', 'clicked', CONFIG.IMPLICIT_CLICKED, false],
     ],
   );
 
@@ -327,10 +328,14 @@ test('pendingFeedback 跳过已评分的', () => {
   assert.equal(r, null);
 });
 
-test('pendingFeedback 补问推了但毫无动作的那顿', () => {
+test('pendingFeedback 不问推了但没点下单的那顿（2026-10-02）', () => {
+  // 打开 App 就会为这一顿写一条推荐；只看了一眼的那顿以前也补问，
+  // 用户为了关掉浮层答「没吃成」，0.4 就记进了一道没碰过的菜的口味分。
   const r = pendingFeedback(
     [obsAt('d1', -1, 19, 'dinner', 'none')], NOW, 'lunch');
-  assert.equal(r.dishId, 'd1');
+  assert.equal(r, null);
+  assert.equal(feedbackCandidate(
+    [obsAt('d1', -1, 19, 'dinner', 'none')], NOW, 'lunch'), null);
 });
 
 test('pendingFeedback 只看最近一条，不翻旧账', () => {
@@ -524,15 +529,16 @@ test('推迟期间不拿更新的、没点过的记录顶上', () => {
   assert.equal(feedbackCandidate(observations, now, 'dinner').dishId, 'burger');
 });
 
-test('早于最近一顿已评分的下单记录不算候选，退回旧规则', () => {
-  // 在旧代码上本就通过；防的是漏掉「晚于最近已评分」限制的错误实现 ——
-  // 那样会把两天前的 burger 翻出来追问（spec §6.1 第 10 条）。
+test('早于最近一顿已评分的下单记录不算候选，也不改问没下单的', () => {
+  // 防的是漏掉「晚于最近已评分」限制的错误实现 ——
+  // 那样会把两天前的 burger 翻出来追问（09-13 spec §6.1 第 10 条）。
+  // 2026-10-02 起没下单的 rice 也不问（以前退回旧规则会问它）。
   const observations = [
     meal('burger', 9, 12, 0, 'lunch', 'clicked', late(9, 12, 1)),
     meal('soup', 10, 19, 0, 'dinner', 'rated'),
     meal('rice', 11, 12, 0, 'lunch', 'none'),
   ];
-  assert.equal(pendingFeedback(observations, late(11, 19, 0), 'dinner').dishId, 'rice');
+  assert.equal(pendingFeedback(observations, late(11, 19, 0), 'dinner'), null);
 });
 
 test('当前这顿下过单也不算候选；更早一顿下过单的照样问', () => {
@@ -550,6 +556,26 @@ test('连着下两顿：先问早餐，评完再问午餐', () => {
 
   const rated = { ...breakfast, source: 'rated', ratedValue: 'ok', eaten: true };
   assert.equal(pendingFeedback([rated, lunch], late(11, 15, 30), 'dinner').dishId, 'noodle');
+});
+
+// ---- 2026-10-02：没点过下单的那顿不再补问 ----
+
+test('好几天没下单：只问最后一次下过单的那顿，中间只看了一眼的都不问', () => {
+  const observations = [
+    meal('burger', 8, 12, 0, 'lunch', 'clicked', late(8, 12, 1)),
+    meal('rice', 9, 19, 0, 'dinner', 'none'),
+    meal('noodle', 11, 12, 0, 'lunch', 'none'),
+  ];
+  assert.equal(pendingFeedback(observations, late(11, 19, 0), 'dinner').dishId, 'burger');
+});
+
+test('评过最后一次下单之后，再怎么打开都不问', () => {
+  const observations = [
+    meal('burger', 8, 12, 0, 'lunch', 'rated'),
+    meal('rice', 9, 19, 0, 'dinner', 'none'),
+    meal('noodle', 11, 12, 0, 'lunch', 'none'),
+  ];
+  assert.equal(pendingFeedback(observations, late(11, 19, 0), 'dinner'), null);
 });
 
 // ---- 2026-09-14：取消静音（spec 2026-09-14 §3.2、§5.1）----
@@ -635,7 +661,7 @@ test('slot 为 null 的 unmuted 不影响 reduceObservations', () => {
 test('下过单没评分的那道菜已被删 → 候选顺延到上一顿还在的', () => {
   const observations = [
     meal('gone', 13, 12, 0, 'lunch', 'clicked', late(13, 12, 5)),
-    meal('kept', 12, 18, 0, 'dinner', 'none'),
+    meal('kept', 12, 18, 0, 'dinner', 'clicked', late(12, 18, 5)),
   ];
   const live = new Set(['kept']);
   const c = feedbackCandidate(observations, late(13, 19, 0), 'dinner', live);
@@ -652,7 +678,7 @@ test('删掉的是最近评过分的那道菜 → 「最近已评分」的线不
   // 09-11 午餐没评分（菜还在）；09-13 午餐已评分，但那道菜被删了。
   // 若算这条线时漏掉已删菜，09-11 那顿会被翻出来重问。
   const observations = [
-    meal('kept', 11, 12, 0, 'lunch', 'none'),
+    meal('kept', 11, 12, 0, 'lunch', 'clicked', late(11, 12, 5)),
     meal('gone', 13, 12, 0, 'lunch', 'rated'),
   ];
   const live = new Set(['kept']);
@@ -671,7 +697,7 @@ test('不传 liveDishIds 时行为不变', () => {
 test('pendingFeedback 把 liveDishIds 透传下去', () => {
   const observations = [
     meal('gone', 13, 12, 0, 'lunch', 'clicked', late(13, 12, 5)),
-    meal('kept', 12, 18, 0, 'dinner', 'none'),
+    meal('kept', 12, 18, 0, 'dinner', 'clicked', late(12, 18, 5)),
   ];
   const nowTs = late(13, 12, 5) + DELAY_MS;
   assert.equal(pendingFeedback(observations, nowTs, 'dinner').dishId, 'gone');
