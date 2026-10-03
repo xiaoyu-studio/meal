@@ -274,8 +274,58 @@ function setUnderProgress(p, smooth = false) {
   under.style.setProperty('--p', String(p));
 }
 
+// ---- 往回翻：上一道从左边盖回来 ----
+//
+// 往前翻是上面那张飞走、底下那张浮上来；往回翻反过来：底下那张换成上一道、
+// 挪到上面、从左边飞回原位，上面这张同时沉成「底下那张」的姿态。到位后换内容：
+// 上面画上一道，底下画刚才这张（正好是新位置的下一道）—— 换之前和换之后
+// 屏幕上一模一样。样式见 style.css 的 .under.incoming / .paper.sinking。
+let backMode = false;
+const setBack = (p) => under.parentElement.style.setProperty('--back', String(p));
+
+function enterBack() {
+  if (backMode) return;
+  backMode = true;
+  el('paper').style.transform = '';
+  under.classList.remove('moving', 'entering');
+  paintUnder(-1);
+  setBack(0);
+  under.classList.add('incoming');
+  el('paper').classList.add('sinking');
+}
+
+function exitBack() {
+  if (!backMode) return;
+  backMode = false;
+  under.classList.remove('incoming');
+  el('paper').classList.remove('sinking');
+  setBack(0);
+}
+
+/** 退出往回翻、底下重新垫上下一道。底下那条边是新冒出来的，淡入。 */
+function cancelBack() {
+  exitBack();
+  under.classList.add('entering');
+  paintUnder(1);
+  void under.offsetWidth;
+  under.classList.remove('entering');
+}
+
+/** --back 从 from 缓到 to（先快后慢），到了调 done。 */
+function tweenBack(from, to, ms, done) {
+  const t0 = performance.now();
+  const tick = (t) => {
+    const k = Math.min((t - t0) / ms, 1);
+    setBack(from + (to - from) * (1 - (1 - k) ** 3));
+    if (k < 1) requestAnimationFrame(tick);
+    else done();
+  };
+  requestAnimationFrame(tick);
+}
+
 /** 把轮播的第 i 项画到卡片上。不写任何事件 —— 浏览是免费的。 */
 function showAt(index) {
+  exitBack();   // 往回翻到一半被整页重画（比如回到前台跨了饭点）：先收干净
   const row = state.ranked[index];
   const shop = state.shops.find((s) => s.id === row.dish.shopId);
   state = { ...state, index, dish: row.dish, shop };
@@ -315,6 +365,7 @@ const prefersReducedMotion = () =>
 let flipping = false;
 
 function animateStep(delta) {
+  if (delta < 0) { flipBack(); return; }
   if (state.ranked.length === 0 || flipping) return;
   const paper = el('paper');
   if (prefersReducedMotion() || !paper.animate) {
@@ -346,6 +397,27 @@ function animateStep(delta) {
     under.classList.remove('entering');
     flipping = false;
   };
+}
+
+/**
+ * 往回翻一道：上一道从左边盖回来。from 是已经拉回来的程度（拖动松手时接着走）。
+ * 只有一道菜、或「减弱动态效果」开着时直接换。
+ */
+function flipBack(from = 0) {
+  if (state.ranked.length === 0 || flipping) return;
+  if (prefersReducedMotion() || state.ranked.length < 2) {
+    exitBack();
+    el('paper').style.transform = '';
+    step(-1);
+    return;
+  }
+  flipping = true;
+  enterBack();
+  tweenBack(from, 1, 260, () => {
+    exitBack();   // 底下那张回到底下 —— 这一帧它还画着上一道，马上被重画
+    step(-1);     // 上面画上一道；底下重画成刚才这张，复位成平时的姿态
+    flipping = false;
+  });
 }
 
 async function render(now = Date.now(), data = null) {
@@ -537,16 +609,23 @@ document.body.addEventListener('pointermove', (e) => {
     try { document.body.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
   }
   drag.dx = dx;
+  // 往右拖：上一道从左边被拉回来、盖在上面，这一张往下沉。拉回来的程度按卡片
+  // 全宽算（不是翻页阈值）：上一道比手指稍快一点跟过来，不会一拖就窜到位。
+  // 只有一道菜时没有「上一道」，退回下面普通的拖动。
+  if (dx > 0 && state.ranked.length > 1) {
+    enterBack();
+    setBack(Math.min(dx / paper.offsetWidth, 1));
+    return;
+  }
+  if (backMode) cancelBack();   // 拖过了头又往左回来
   // 0.88 次幂：小位移几乎一比一跟手，拖得越远越沉。同时按位移的 1/26
   // 轻微旋转 —— 纸被推着走会偏一点，正着平移反而假。
   const damped = Math.sign(dx) * Math.abs(dx) ** 0.88;
   paper.style.transform = `translateX(${damped}px) rotate(${damped / 26}deg)`;
-  // 底下那张：往左拖露出下一道，往右拖露出上一道，方向一变就重画。
-  // 拖到翻页阈值时刚好浮到原位 —— 松手翻过去就是它。
-  if (dx !== 0) {
-    const dir = dx < 0 ? 1 : -1;
-    if (dir !== underDir && underDir !== 0) paintUnder(dir);
-    setUnderProgress(Math.min(Math.abs(dx) / (paper.offsetWidth * SWIPE_RATIO), 1));
+  // 往左拖：底下那张（下一道）跟着浮上来，到翻页阈值时刚好浮到原位 ——
+  // 松手翻过去就是它。
+  if (dx < 0) {
+    setUnderProgress(Math.min(-dx / (paper.offsetWidth * SWIPE_RATIO), 1));
   }
 }, { passive: true });
 
@@ -559,8 +638,17 @@ function endDrag(e, cancel) {
   try { document.body.releasePointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
 
   // 阈值按卡片宽度算，不用固定像素 —— 换个更宽的屏手感才一样。
-  if (!cancel && Math.abs(dx) > paper.offsetWidth * SWIPE_RATIO) {
-    animateStep(dx < 0 ? 1 : -1);   // 左拖看下一道，右拖退回上一道
+  const past = !cancel && Math.abs(dx) > paper.offsetWidth * SWIPE_RATIO;
+  if (backMode) {
+    const p = Math.min(dx / paper.offsetWidth, 1);
+    if (past) { flipBack(p); return; }   // 右拖过了阈值：上一道接着盖到原位
+    // 不够：上一道退回左边，这一张浮回来。
+    flipping = true;
+    tweenBack(p, 0, 200, () => { cancelBack(); flipping = false; });
+    return;
+  }
+  if (past) {
+    animateStep(dx < 0 ? 1 : -1);   // 左拖看下一道（只有一道菜时右拖也走这里）
     return;
   }
   // 不够就弹回原位，带一点过冲。

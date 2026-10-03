@@ -320,10 +320,15 @@ html.switching .view { visibility: visible; }
 /* 御膳房：普通的上下滚动页面，自己就是滚动容器。contain 让滚到头的回弹
    只发生在这一层，不带着整个文档（和 TabBar）一起晃。
    顶部不留安全区：饭点色的封面自己铺到状态栏后面（.cover 的上内边距里含安全区）。
-   横向裁掉：歪着放的纸页角会探出去一两像素，不裁就能左右滑。 */
+   横向裁掉：歪着放的纸页角会探出去一两像素，不裁就能左右滑。
+   背景上半截饭点色、下半截页面底色：回弹拉出来的空白露的是滚动容器自己的背景
+   （它不跟着内容滚），顶上往下拽露封面色，底下往上推露底色。内容本身铺一层
+   页面底色（.view-pool > .wrap），平时盖住这块双色背景。2026-10-03 真机：
+   以前背景是纯底色，往下拽露出一大片白；在封面上方多铺一屏颜色的办法（.cover::before）
+   iOS 上画不出来 —— 滚动起点以上的内容不绘制。 */
 .view-pool {
   padding-top: 0;
-  background: var(--bg);
+  background: linear-gradient(var(--board-a) 50%, var(--bg) 50%);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -401,6 +406,23 @@ html.switching .view { visibility: visible; }
 .under.moving { transition: transform 0.18s ease-out, opacity 0.35s ease-out; }
 .under .tape, .under .polaroid, .under .stickers { opacity: var(--p); }
 .under.moving .tape, .under.moving .polaroid, .under.moving .stickers { transition: opacity 0.18s ease-out; }
+
+/* 往回翻：上一道从左边飞回来盖在上面，这一张同时往下沉成「底下那张」的样子
+   （小一圈、往上错开、装饰淡掉）。--back 写在 .stack 上，两张共用：0 是没开始，
+   1 是上一道刚好盖到原位、这一张刚好沉到底 —— 这时换内容，前后两帧一模一样。
+   以前往回翻和往前翻是同一个动作（上面那张往右飞走、底下浮上来），看着像又翻了
+   一张新的（2026-10-03 真机反馈）。逐帧由 ui-today.js 写，不带过渡。 */
+.under.incoming {
+  z-index: 1;   /* 压过 .paper */
+  transform-origin: 50% 50%;
+  transform: translateX(calc(-125% * (1 - var(--back, 0)))) rotate(calc(-9deg * (1 - var(--back, 0))));
+}
+.under.incoming .tape, .under.incoming .polaroid, .under.incoming .stickers { opacity: 1; }
+.paper.sinking {
+  transform-origin: 50% 0;
+  transform: translateY(calc(-12px * var(--back, 0))) scale(calc(1 - 0.06 * var(--back, 0)));
+}
+.paper.sinking .tape, .paper.sinking .polaroid, .paper.sinking .stickers { opacity: calc(1 - var(--back, 0)); }
 
 .note {
   position: relative;
@@ -668,6 +690,14 @@ html.switching .view { visibility: visible; }
   transform: rotate(-0.8deg);
   touch-action: manipulation;
 }
+/* 深色模式：TabBar 和御膳房的纸页是同一种深棕，投影压在深底上又看不出来，
+   两者融成一片（2026-10-03 真机）。纸面提亮一档、投影加深，再描一圈极淡的亮边。 */
+@media (prefers-color-scheme: dark) {
+  .tabbar {
+    background-color: #42372e;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 10px 28px rgb(0 0 0 / 0.75);
+  }
+}
 .tabbar::before {
   content: "";
   position: absolute;
@@ -751,7 +781,7 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   }
 }
 
-.view-pool > .wrap { padding-top: 0; padding-inline: 0; }
+.view-pool > .wrap { min-height: 100%; padding-top: 0; padding-inline: 0; background: var(--bg); }
 .view-pool .card { margin: 1.5rem 1rem; }   /* 读取失败的那张卡片 */
 
 /* ---- 封面 ---- */
@@ -761,15 +791,6 @@ html[data-view="pool"] .tab[data-tab="pool"] .tab-ico { animation: tab-bob 2.2s 
   border-radius: 0 0 1.8rem 1.8rem;
   background: linear-gradient(160deg, var(--board-a), var(--board-b));
   color: #fff;
-}
-/* 往上再铺一屏同色：滚到顶再往下拽，回弹露出来的是封面色，不是一截页面底色。 */
-.cover::before {
-  content: "";
-  position: absolute;
-  left: 0; right: 0;
-  bottom: 100%;
-  height: 100vh;
-  background: var(--board-a);
 }
 /* 线装书的装订线：一道虚线穿过一排针眼。 */
 .stitch {
