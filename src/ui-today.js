@@ -671,6 +671,8 @@ el('order').addEventListener('pointerdown', () => { paper.classList.add('pressed
 window.addEventListener('pointerup', () => { paper.classList.remove('pressed'); });
 window.addEventListener('pointercancel', () => { paper.classList.remove('pressed'); });
 
+let muteMsgTimer = null;   // 「没记上」那句话 2 秒后换回理由的定时器
+
 el('mute').addEventListener('click', async () => {
   const dish = state.dish;
   if (!dish) return;
@@ -681,12 +683,15 @@ el('mute').addEventListener('click', async () => {
     // 这个按钮的全部意义就是让它持久生效，所以写失败必须让用户看见 ——
     // 手机上没有控制台可看。也不要翻页：卡片一动，用户就会以为记下了。
     console.error('记录「别再推这个」事件失败', err);
-    const original = el('reason').textContent;
     el('reason').textContent = '没记上，请稍后再试';
     // 这 2 秒里用户可以翻页。恢复前确认还停在同一张卡片上，
     // 否则会把旧卡片的理由写到新卡片上去。
-    setTimeout(() => {
-      if (state.dish?.id === dish.id) el('reason').textContent = original;
+    // 换回的理由从数据里取，不在失败那一刻读屏幕：连按两下时第二下读到的
+    // 已经是「没记上」这句话，2 秒后会把它当原文写回去，从此卡在卡片上
+    // （2026-10-04 在浏览器里注入写入失败实测出来的）。
+    clearTimeout(muteMsgTimer);
+    muteMsgTimer = setTimeout(() => {
+      if (state.dish?.id === dish.id) el('reason').textContent = state.ranked[state.index].reason;
     }, 2000);
     return;
   }
