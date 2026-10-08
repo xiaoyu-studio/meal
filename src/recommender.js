@@ -131,7 +131,7 @@ export function reasonFor({
   if (lastRatedValue === 'good') return '你上次说好吃';
   // 这句话字面就是在讲评价，所以要求真的评过分。只点过「去下单」的那几顿
   // 按 IMPLICIT_CLICKED 计入好吃度，足以让一道从没被评价过的菜排到最高 ——
-  // 拿它撑这句话，等于替用户说了一句他没说过的话（TODO 第 10 条，2026-09-20）。
+  // 拿它撑这句话，等于替用户说了一句他没说过的话（2026-09-20 改）。
   if (isTopTaste && hasRating) return '评价一直不错';
   if (isTopValue) return '同类里最便宜';
   if (fDish >= CONFIG.LONG_TIME_FDISH) return '好久没吃了';

@@ -707,7 +707,7 @@ test('pendingFeedback 把 liveDishIds 透传下去', () => {
   );
 });
 
-// ---- 2026-09-20：一顿里带评分的组不被丢弃（TODO 第 8 条）----
+// ---- 2026-09-20：一顿里带评分的组不被丢弃 ----
 
 test('同一顿里带 rated 的组优先保留，即使它不是最后一条推荐', () => {
   const obs = reduceObservations([
@@ -744,7 +744,7 @@ test('都不带 rated 时照旧取最后一条推荐的那组', () => {
   assert.equal(obs[0].source, 'clicked');
 });
 
-// ---- 2026-09-20：带 dateKey 的事件找不到那组时不再猜（TODO 第 9 条）----
+// ---- 2026-09-20：带 dateKey 的事件找不到那组时不再猜 ----
 
 test('带 dateKey 的 clicked 找不到自己那组 → 不挂到几周前的同菜同饭点组上', () => {
   // 09-01 午餐推过甲菜；09-13 午餐补写推荐失败，只留下一条带 dateKey 的 clicked。

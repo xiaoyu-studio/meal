@@ -61,7 +61,7 @@ async function renderFeedback(now = Date.now(), data = null) {
     const { shops, dishes, events } = data ?? await loadAll();
 
     // 传进去的是此刻还在候选池的菜：已删的菜那顿问不出口，交给它顺延到上一顿，
-    // 否则那顿会一直占着候选位，别的顿也问不到（TODO 第 7 条）。
+    // 否则那顿会一直占着候选位，别的顿也问不到（2026-09-20 改）。
     const live = new Set(dishes.map((d) => d.id));
     const target = pendingFeedback(reduceObservations(events), now, slot, live);
     if (!target) return;
@@ -90,7 +90,7 @@ async function renderFeedback(now = Date.now(), data = null) {
         <p class="fb-price-msg" hidden></p>
       </div>
     `;
-    // dish.name 来自用户在候选池里填写的数据（Task 15），不能当作可信 HTML 拼进
+    // dish.name 来自用户在候选池里填写的数据，不能当作可信 HTML 拼进
     // innerHTML —— 走 textContent 天然转义，不需要额外的转义辅助函数。
     overlay.querySelector('.fb-question').textContent = `上顿的${dish.name}怎么样？`;
     overlay.hidden = false;

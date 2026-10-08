@@ -206,8 +206,8 @@ async function render() {
           })
           .join('');
 
-        // 渲染已存的链接同样要过协议白名单 —— 这个检查是 Task 15 才加的，
-        // 早先存进库里的坏数据不能靠"以后不会再存进去"就当没事。
+        // 渲染已存的链接同样要过协议白名单 —— 库里的链接不一定走过上面的表单
+        // （导入的备份就没走过），不能靠「存的时候查过」就当没事。
         const linkHtml = isSafeLink(shop.link)
           ? `<a class="chip" href="${esc(shop.link)}">🔗 去店里</a>`
           : '<span class="chip chip-bad">链接无效，点「换链接」重新粘贴</span>';
